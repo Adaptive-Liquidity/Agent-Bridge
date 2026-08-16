@@ -1,4 +1,3 @@
-import { timingSafeEqual } from "node:crypto";
 import { createServer as createNodeHttpServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { pathToFileURL } from "node:url";
@@ -7,6 +6,7 @@ import {
   localhostOriginValidation,
   NodeStreamableHTTPServerTransport,
 } from "@modelcontextprotocol/node";
+import { isExpectedBearerToken } from "./auth.js";
 import { createServer as createMcpServer } from "./server.js";
 
 const LOCAL_HOST = "127.0.0.1";
@@ -41,23 +41,6 @@ export function resolveLocalHttpConfig(
   }
 
   return { host: LOCAL_HOST, port, bearerToken };
-}
-
-export function isExpectedBearerToken(
-  authorization: string | undefined,
-  bearerToken: string,
-): boolean {
-  if (authorization === undefined) {
-    return false;
-  }
-
-  const expected = Buffer.from(`Bearer ${bearerToken}`);
-  const received = Buffer.from(authorization);
-
-  return (
-    received.length === expected.length &&
-    timingSafeEqual(received, expected)
-  );
 }
 
 export function startLocalHttpServer(

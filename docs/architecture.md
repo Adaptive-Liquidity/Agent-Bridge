@@ -6,7 +6,7 @@ Agent-Bridge is a private MCP application that will let authorized ChatGPT conve
 
 It is not a general-purpose automation platform, browser controller, or credential store.
 
-## Phase 4: loopback-only Streamable HTTP
+## Phase 5: disabled serverless endpoint
 
 The current implementation exposes three MCP tools:
 
@@ -14,16 +14,14 @@ The current implementation exposes three MCP tools:
 - `github_repository_snapshot`: returns a narrow snapshot of public metadata for the one allowlisted repository, `Adaptive-Liquidity/Agent-Bridge`.
 - `validate_evidence_handoff`: validates a proposed Grok Evidence Handoff and returns a structured packet for Docs, or an explicit missing/invalid-fields result.
 
-It also contains an optional local Streamable HTTP transport. It is deliberately constrained:
+It includes two HTTP transports:
 
-- binds only to `127.0.0.1`, never a public interface;
-- accepts only the `/mcp` path;
-- applies localhost Host and Origin validation;
-- requires an exact bearer token from `AGENT_BRIDGE_LOCAL_TOKEN` (32+ characters);
-- is stateless and creates a fresh MCP server/transport per request;
-- has no default secret and refuses to start without one.
+- a loopback-only local transport, for development and verification;
+- a Vercel-compatible `api/mcp.ts` function that is inert until `AGENT_BRIDGE_PUBLIC_TOKEN` exists in a managed environment.
 
-This is a development and verification surface only. It is not a public ChatGPT connection. A real remote deployment needs an explicit host, HTTPS, managed secrets, OAuth or equivalent identity, logging, rate limits, and a separate approval before any deployment.
+The public function never creates or defaults a secret. Without a 32+ character managed token, every request receives `503`. With a token it requires an exact bearer header, uses a stateless MCP transport, and exposes only the existing tool surface. It does not add a provider, write path, Grok Bot control path, or browser/computer control.
+
+No Vercel project, secret, domain, or deployment is created by this phase. A live connection requires a separate approval to create a project, set a managed secret, deploy a preview, verify it, then decide whether to create a ChatGPT connection.
 
 The GitHub provider sends no credential, accepts no credential, and calls only `GET /repos/Adaptive-Liquidity/Agent-Bridge`. Its response is narrowed to repository URL, visibility, default branch, and GitHub timestamps. It has no private-repository, PR, issue, write, browser, or computer access.
 
