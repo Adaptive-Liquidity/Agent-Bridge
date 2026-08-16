@@ -13,16 +13,16 @@ const RECORD_TYPES = [
 const NEXT_OWNERS = [...OWNER_CRAFTS, "Done"] as const;
 
 export interface EvidenceHandoffInput {
-  projectOrScope?: string;
-  ownerCraft?: string;
-  recordType?: string;
-  artifactUrl?: string;
-  verify?: string;
-  nextOwner?: string;
-  summary?: string;
-  openBlockerOrApprovalNeeded?: string;
-  consequentialClaim?: boolean;
-  sourceUrls?: string[];
+  projectOrScope?: string | undefined;
+  ownerCraft?: string | undefined;
+  recordType?: string | undefined;
+  artifactUrl?: string | undefined;
+  verify?: string | undefined;
+  nextOwner?: string | undefined;
+  summary?: string | undefined;
+  openBlockerOrApprovalNeeded?: string | undefined;
+  consequentialClaim?: boolean | undefined;
+  sourceUrls?: string[] | undefined;
 }
 
 export type EvidenceHandoffValidation =
@@ -37,7 +37,7 @@ export type EvidenceHandoffValidation =
       status: "valid_packet";
       mayWrite: false;
       handoffPacket: EvidenceHandoff & {
-        openBlockerOrApprovalNeeded?: string;
+        openBlockerOrApprovalNeeded?: string | undefined;
         sourceUrls: string[];
       };
     };
