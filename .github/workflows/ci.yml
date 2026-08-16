@@ -30,3 +30,9 @@ jobs:
 
       - name: Test
         run: npm test
+
+      - name: Inspect MCP protocol
+        run: |
+          set -euo pipefail
+          npx -y @modelcontextprotocol/inspector --cli node dist/index.js --method tools/list --format json
+          npx -y @modelcontextprotocol/inspector --cli node dist/index.js --method tools/call --tool-name bridge_status --format json

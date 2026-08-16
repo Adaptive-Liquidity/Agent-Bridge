@@ -1,9 +1,9 @@
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { createServer } from "./server.js";
 
-const handle = serveStdio(createServer);
+const handle = serveStdio(() => createServer());
 
-console.error("Agent-Bridge Phase 1 is listening on stdio.");
+console.error("Agent-Bridge Phase 2 is listening on stdio.");
 
 process.on("SIGINT", () => {
   void handle.close();
