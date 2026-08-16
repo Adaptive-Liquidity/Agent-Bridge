@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  allowsUnauthenticatedMixedAuth,
   auth0InsufficientScopeWwwAuthenticate,
   auth0WwwAuthenticate,
   buildProtectedResourceMetadata,
   CANONICAL_AUTH0_AUDIENCE,
+  CANONICAL_AUTH0_MCP_AUDIENCE,
   joinIssuerWellKnown,
+  MIXED_AUTH_UNAUTHENTICATED_METHODS,
   protectedResourceMetadataUrl,
+  readJsonRpcMethod,
   REQUIRED_AUTH0_SCOPE,
   resolveAuth0Config,
   verifyAuth0Bearer,
@@ -122,6 +126,35 @@ test("rejects a token with a bad signature", async (t) => {
   assert.deepEqual(accepted, { status: "unauthorized" });
 });
 
+test("accepts a token whose audience is the MCP resource URL", async (t) => {
+  const keys = await generateTestKeyMaterial();
+  mockJwksFetch(keys.publicJwk);
+  t.after(() => restoreFetch(originalFetch));
+
+  const token = await signAccessToken(keys.privateKey, {
+    audience: CANONICAL_AUTH0_MCP_AUDIENCE,
+  });
+  const accepted = await verifyAuth0Bearer(`Bearer ${token}`, {
+    issuer: TEST_ISSUER,
+    audience: CANONICAL_AUTH0_AUDIENCE,
+    jwksUri: TEST_JWKS_URI,
+  });
+
+  assert.deepEqual(accepted, { status: "ok" });
+
+  const arrayAudienceToken = await signAccessToken(keys.privateKey, {
+    audience: [CANONICAL_AUTH0_MCP_AUDIENCE],
+  });
+  assert.deepEqual(
+    await verifyAuth0Bearer(`Bearer ${arrayAudienceToken}`, {
+      issuer: TEST_ISSUER,
+      audience: CANONICAL_AUTH0_AUDIENCE,
+      jwksUri: TEST_JWKS_URI,
+    }),
+    { status: "ok" },
+  );
+});
+
 test("rejects a token with the wrong audience", async (t) => {
   const keys = await generateTestKeyMaterial();
   mockJwksFetch(keys.publicJwk);
@@ -208,12 +241,51 @@ test("401 challenge points at the absolute protected-resource metadata URL", () 
   const metadataParam = ["resource", "metadata"].join("_");
   assert.equal(
     auth0WwwAuthenticate(),
-    `Bearer ${metadataParam}="${protectedResourceMetadataUrl()}", scope="${REQUIRED_AUTH0_SCOPE}"`,
+    `Bearer ${metadataParam}="${protectedResourceMetadataUrl()}", scope="${REQUIRED_AUTH0_SCOPE}", error="invalid_token", error_description="Authentication required"`,
   );
   assert.equal(
     protectedResourceMetadataUrl(),
     `${CANONICAL_AUTH0_AUDIENCE}/.well-known/oauth-protected-resource`,
   );
+});
+
+test("reads only a JSON-RPC object with a non-empty string method", () => {
+  assert.equal(readJsonRpcMethod({ jsonrpc: "2.0", method: "tools/list" }), "tools/list");
+  assert.equal(readJsonRpcMethod({ method: "initialize" }), "initialize");
+  assert.equal(readJsonRpcMethod(undefined), undefined);
+  assert.equal(readJsonRpcMethod(null), undefined);
+  assert.equal(readJsonRpcMethod("tools/list"), undefined);
+  assert.equal(readJsonRpcMethod(["tools/list"]), undefined);
+  assert.equal(readJsonRpcMethod({ method: 1 }), undefined);
+  assert.equal(readJsonRpcMethod({ method: "" }), undefined);
+  assert.equal(readJsonRpcMethod({}), undefined);
+});
+
+test("allows unauthenticated Mixed discovery methods only without Authorization", () => {
+  for (const method of MIXED_AUTH_UNAUTHENTICATED_METHODS) {
+    assert.equal(
+      allowsUnauthenticatedMixedAuth(undefined, { jsonrpc: "2.0", method }),
+      true,
+    );
+    assert.equal(
+      allowsUnauthenticatedMixedAuth("", { jsonrpc: "2.0", method }),
+      true,
+    );
+    assert.equal(
+      allowsUnauthenticatedMixedAuth("Bearer garbage", { jsonrpc: "2.0", method }),
+      false,
+    );
+  }
+
+  assert.equal(
+    allowsUnauthenticatedMixedAuth(undefined, {
+      jsonrpc: "2.0",
+      method: "tools/call",
+    }),
+    false,
+  );
+  assert.equal(allowsUnauthenticatedMixedAuth(undefined, { jsonrpc: "2.0" }), false);
+  assert.equal(allowsUnauthenticatedMixedAuth(undefined, null), false);
 });
 
 test("403 challenge reports insufficient_scope with the same metadata URL", () => {

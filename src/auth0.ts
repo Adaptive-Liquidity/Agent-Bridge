@@ -3,7 +3,19 @@ import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 export const CANONICAL_AUTH0_AUDIENCE =
   "https://agent-bridge-oauth-preview-adaptive-liquidity-labs.vercel.app";
 
+export const CANONICAL_AUTH0_MCP_AUDIENCE = `${CANONICAL_AUTH0_AUDIENCE}/api/mcp`;
+
 export const REQUIRED_AUTH0_SCOPE = "agent-bridge.read";
+
+export const MIXED_AUTH_UNAUTHENTICATED_METHODS = [
+  "initialize",
+  "notifications/initialized",
+  "ping",
+  "tools/list",
+] as const;
+
+export type MixedAuthUnauthenticatedMethod =
+  (typeof MIXED_AUTH_UNAUTHENTICATED_METHODS)[number];
 
 export const PROTECTED_RESOURCE_METADATA_PATH =
   "/.well-known/oauth-protected-resource";
@@ -48,7 +60,41 @@ export function protectedResourceMetadataUrl(): string {
 const RFC9728_METADATA_PARAM = ["resource", "metadata"].join("_");
 
 export function auth0WwwAuthenticate(): string {
-  return `Bearer ${RFC9728_METADATA_PARAM}="${protectedResourceMetadataUrl()}", scope="${REQUIRED_AUTH0_SCOPE}"`;
+  return `Bearer ${RFC9728_METADATA_PARAM}="${protectedResourceMetadataUrl()}", scope="${REQUIRED_AUTH0_SCOPE}", error="invalid_token", error_description="Authentication required"`;
+}
+
+export function readJsonRpcMethod(body: unknown): string | undefined {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return undefined;
+  }
+
+  const method = (body as { method?: unknown }).method;
+  return typeof method === "string" && method.length > 0 ? method : undefined;
+}
+
+export function isAuthorizationHeaderMissing(
+  authorization: string | string[] | undefined,
+): boolean {
+  return typeof authorization !== "string" || authorization.trim().length === 0;
+}
+
+export function isMixedAuthUnauthenticatedMethod(
+  method: string | undefined,
+): method is MixedAuthUnauthenticatedMethod {
+  return (
+    method !== undefined &&
+    (MIXED_AUTH_UNAUTHENTICATED_METHODS as readonly string[]).includes(method)
+  );
+}
+
+export function allowsUnauthenticatedMixedAuth(
+  authorization: string | string[] | undefined,
+  body: unknown,
+): boolean {
+  return (
+    isAuthorizationHeaderMissing(authorization) &&
+    isMixedAuthUnauthenticatedMethod(readJsonRpcMethod(body))
+  );
 }
 
 export function auth0InsufficientScopeWwwAuthenticate(): string {
@@ -104,7 +150,7 @@ export async function verifyAuth0Bearer(
   try {
     const { payload } = await jwtVerify(token, getRemoteJwks(config.jwksUri), {
       issuer: config.issuer,
-      audience: config.audience,
+      audience: [CANONICAL_AUTH0_AUDIENCE, CANONICAL_AUTH0_MCP_AUDIENCE],
     });
 
     if (!hasExactAudience(payload.aud)) {
@@ -150,13 +196,17 @@ function extractBearerToken(
   return token.length > 0 ? token : undefined;
 }
 
+function isAcceptedAudience(aud: string): boolean {
+  return aud === CANONICAL_AUTH0_AUDIENCE || aud === CANONICAL_AUTH0_MCP_AUDIENCE;
+}
+
 function hasExactAudience(aud: JWTPayload["aud"]): boolean {
-  return (
-    aud === CANONICAL_AUTH0_AUDIENCE ||
-    (Array.isArray(aud) &&
-      aud.length === 1 &&
-      aud[0] === CANONICAL_AUTH0_AUDIENCE)
-  );
+  if (typeof aud === "string") {
+    return isAcceptedAudience(aud);
+  }
+
+  const onlyAudience = Array.isArray(aud) && aud.length === 1 ? aud[0] : undefined;
+  return typeof onlyAudience === "string" && isAcceptedAudience(onlyAudience);
 }
 
 function hasRequiredScope(payload: JWTPayload): boolean {

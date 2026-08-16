@@ -7,6 +7,7 @@ import {
   auth0InsufficientScopeWwwAuthenticate,
   auth0WwwAuthenticate,
   CANONICAL_AUTH0_AUDIENCE,
+  CANONICAL_AUTH0_MCP_AUDIENCE,
   REQUIRED_AUTH0_SCOPE,
 } from "../src/auth0.js";
 import {
@@ -115,7 +116,63 @@ test("Auth0 preview path forwards the parsed body after a valid JWT", async (t) 
   ]);
 });
 
-test("Auth0 preview path returns a resource_metadata 401 for a missing JWT", async (t) => {
+test("Auth0 Mixed path forwards initialize without Authorization", async (t) => {
+  const handleRequest = mock.method(
+    NodeStreamableHTTPServerTransport.prototype,
+    "handleRequest",
+    async () => undefined,
+  );
+  t.after(() => {
+    handleRequest.mock.restore();
+  });
+
+  const parsedBody = { jsonrpc: "2.0", id: 1, method: "initialize" };
+  const request = {
+    headers: {},
+    body: parsedBody,
+  } as IncomingMessage & { body?: unknown };
+  const { response, recorded } = createResponse();
+
+  await handleMcpRequest(request, response, auth0PreviewEnv);
+
+  assert.equal(recorded.status, undefined);
+  assert.equal(handleRequest.mock.calls.length, 1);
+  assert.deepEqual(handleRequest.mock.calls[0]?.arguments, [
+    request,
+    response,
+    parsedBody,
+  ]);
+});
+
+test("Auth0 Mixed path forwards tools/list without Authorization", async (t) => {
+  const handleRequest = mock.method(
+    NodeStreamableHTTPServerTransport.prototype,
+    "handleRequest",
+    async () => undefined,
+  );
+  t.after(() => {
+    handleRequest.mock.restore();
+  });
+
+  const parsedBody = { jsonrpc: "2.0", id: 3, method: "tools/list" };
+  const request = {
+    headers: {},
+    body: parsedBody,
+  } as IncomingMessage & { body?: unknown };
+  const { response, recorded } = createResponse();
+
+  await handleMcpRequest(request, response, auth0PreviewEnv);
+
+  assert.equal(recorded.status, undefined);
+  assert.equal(handleRequest.mock.calls.length, 1);
+  assert.deepEqual(handleRequest.mock.calls[0]?.arguments, [
+    request,
+    response,
+    parsedBody,
+  ]);
+});
+
+test("Auth0 Mixed path returns a resource_metadata 401 for tools/call without a JWT", async (t) => {
   const handleRequest = mock.method(
     NodeStreamableHTTPServerTransport.prototype,
     "handleRequest",
@@ -127,9 +184,88 @@ test("Auth0 preview path returns a resource_metadata 401 for a missing JWT", asy
 
   const { response, recorded } = createResponse();
   await handleMcpRequest(
-    { headers: {}, body: { jsonrpc: "2.0", id: 3, method: "tools/list" } } as IncomingMessage & {
-      body?: unknown;
-    },
+    {
+      headers: {},
+      body: {
+        jsonrpc: "2.0",
+        id: 10,
+        method: "tools/call",
+        params: { name: "bridge_status" },
+      },
+    } as IncomingMessage & { body?: unknown },
+    response,
+    auth0PreviewEnv,
+  );
+
+  assert.equal(recorded.status, 401);
+  assert.equal(recorded.headers?.["WWW-Authenticate"], auth0WwwAuthenticate());
+  assert.equal(
+    recorded.headers?.["WWW-Authenticate"]?.includes('error="invalid_token"'),
+    true,
+  );
+  assert.equal(
+    recorded.headers?.["WWW-Authenticate"]?.includes(
+      `${["resource", "metadata"].join("_")}=`,
+    ),
+    true,
+  );
+  assert.equal(handleRequest.mock.calls.length, 0);
+});
+
+test("Auth0 Mixed path forwards tools/call after a valid JWT with the required scope", async (t) => {
+  const keys = await generateTestKeyMaterial();
+  mockJwksFetch(keys.publicJwk);
+  t.after(() => restoreFetch(originalFetch));
+
+  const handleRequest = mock.method(
+    NodeStreamableHTTPServerTransport.prototype,
+    "handleRequest",
+    async () => undefined,
+  );
+  t.after(() => {
+    handleRequest.mock.restore();
+  });
+
+  const token = await signAccessToken(keys.privateKey);
+  const parsedBody = {
+    jsonrpc: "2.0",
+    id: 11,
+    method: "tools/call",
+    params: { name: "bridge_status" },
+  };
+  const request = {
+    headers: { authorization: `Bearer ${token}` },
+    body: parsedBody,
+  } as IncomingMessage & { body?: unknown };
+  const { response, recorded } = createResponse();
+
+  await handleMcpRequest(request, response, auth0PreviewEnv);
+
+  assert.equal(recorded.status, undefined);
+  assert.equal(handleRequest.mock.calls.length, 1);
+  assert.deepEqual(handleRequest.mock.calls[0]?.arguments, [
+    request,
+    response,
+    parsedBody,
+  ]);
+});
+
+test("Auth0 Mixed path still returns 401 for tools/list with an invalid JWT", async (t) => {
+  const handleRequest = mock.method(
+    NodeStreamableHTTPServerTransport.prototype,
+    "handleRequest",
+    async () => undefined,
+  );
+  t.after(() => {
+    handleRequest.mock.restore();
+  });
+
+  const { response, recorded } = createResponse();
+  await handleMcpRequest(
+    {
+      headers: { authorization: "Bearer not-a-jwt" },
+      body: { jsonrpc: "2.0", id: 12, method: "tools/list" },
+    } as IncomingMessage & { body?: unknown },
     response,
     auth0PreviewEnv,
   );
@@ -137,6 +273,59 @@ test("Auth0 preview path returns a resource_metadata 401 for a missing JWT", asy
   assert.equal(recorded.status, 401);
   assert.equal(recorded.headers?.["WWW-Authenticate"], auth0WwwAuthenticate());
   assert.equal(handleRequest.mock.calls.length, 0);
+});
+
+test("Auth0 Mixed path treats a non-JSON-RPC body as protected", async (t) => {
+  const handleRequest = mock.method(
+    NodeStreamableHTTPServerTransport.prototype,
+    "handleRequest",
+    async () => undefined,
+  );
+  t.after(() => {
+    handleRequest.mock.restore();
+  });
+
+  const { response, recorded } = createResponse();
+  await handleMcpRequest(
+    { headers: {}, body: "not-json-rpc" } as IncomingMessage & { body?: unknown },
+    response,
+    auth0PreviewEnv,
+  );
+
+  assert.equal(recorded.status, 401);
+  assert.equal(recorded.headers?.["WWW-Authenticate"], auth0WwwAuthenticate());
+  assert.equal(handleRequest.mock.calls.length, 0);
+});
+
+test("Auth0 preview path accepts a JWT whose audience is the MCP resource URL", async (t) => {
+  const keys = await generateTestKeyMaterial();
+  mockJwksFetch(keys.publicJwk);
+  t.after(() => restoreFetch(originalFetch));
+
+  const handleRequest = mock.method(
+    NodeStreamableHTTPServerTransport.prototype,
+    "handleRequest",
+    async () => undefined,
+  );
+  t.after(() => {
+    handleRequest.mock.restore();
+  });
+
+  const token = await signAccessToken(keys.privateKey, {
+    audience: CANONICAL_AUTH0_MCP_AUDIENCE,
+  });
+  const { response, recorded } = createResponse();
+  await handleMcpRequest(
+    {
+      headers: { authorization: `Bearer ${token}` },
+      body: { jsonrpc: "2.0", id: 13, method: "tools/call" },
+    } as IncomingMessage & { body?: unknown },
+    response,
+    auth0PreviewEnv,
+  );
+
+  assert.equal(recorded.status, undefined);
+  assert.equal(handleRequest.mock.calls.length, 1);
 });
 
 test("Auth0 preview path does not accept AGENT_BRIDGE_PUBLIC_TOKEN as a substitute", async (t) => {
