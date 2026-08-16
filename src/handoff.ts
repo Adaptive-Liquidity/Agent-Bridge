@@ -84,8 +84,7 @@ export function validateEvidenceHandoff(
       missingFields,
       invalidFields,
       correctOwner: isChoice(input.ownerCraft, OWNER_CRAFTS)
-        ? input.ownerCraft
-        : "Docs",
+        ? input.ownerCraft!\n        : "Docs",
     };
   }
 
@@ -93,13 +92,13 @@ export function validateEvidenceHandoff(
     status: "valid_packet",
     mayWrite: false,
     handoffPacket: {
-      projectOrScope: input.projectOrScope.trim(),
+      projectOrScope: input.projectOrScope!.trim(),
       ownerCraft: input.ownerCraft as EvidenceHandoff["ownerCraft"],
       recordType: input.recordType as EvidenceHandoff["recordType"],
-      artifactUrl: input.artifactUrl.trim(),
-      verify: input.verify.trim(),
+      artifactUrl: input.artifactUrl!.trim(),
+      verify: input.verify!.trim(),
       nextOwner: input.nextOwner as EvidenceHandoff["nextOwner"],
-      summary: input.summary.trim(),
+      summary: input.summary!.trim(),
       ...(hasText(input.openBlockerOrApprovalNeeded)
         ? { openBlockerOrApprovalNeeded: input.openBlockerOrApprovalNeeded.trim() }
         : {}),
