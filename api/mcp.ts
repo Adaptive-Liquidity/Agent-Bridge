@@ -3,12 +3,14 @@ import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
 import { isExpectedBearerToken } from "../src/auth.js";
 import { createServer as createMcpServer } from "../src/server.js";
 
+type VercelIncomingMessage = IncomingMessage & { body?: unknown };
+
 /**
  * Vercel serverless endpoint. It remains disabled until a managed token is
  * configured; no fallback or generated secret exists in source.
  */
 export default async function handler(
-  request: IncomingMessage,
+  request: VercelIncomingMessage,
   response: ServerResponse,
 ): Promise<void> {
   const bearerToken = process.env.AGENT_BRIDGE_PUBLIC_TOKEN;
@@ -32,7 +34,7 @@ export default async function handler(
       sessionIdGenerator: undefined,
     });
     await createMcpServer().connect(transport);
-    await transport.handleRequest(request, response);
+    await transport.handleRequest(request, response, request.body);
   } catch {
     if (!response.headersSent) {
       response.writeHead(500).end("MCP request failed.");
