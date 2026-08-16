@@ -84,7 +84,8 @@ export function validateEvidenceHandoff(
       missingFields,
       invalidFields,
       correctOwner: isChoice(input.ownerCraft, OWNER_CRAFTS)
-        ? input.ownerCraft!        : "Docs",
+        ? input.ownerCraft!
+        : "Docs",
     };
   }
 
