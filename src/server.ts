@@ -1,4 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/server";
+import * as z from "zod/v4";
+import { validateEvidenceHandoff } from "./handoff.js";
 import { BridgePolicy } from "./policy.js";
 import {
   PublicGitHubReadProvider,
@@ -21,14 +23,14 @@ export function createServer(options: ServerOptions = {}): McpServer {
 
   const server = new McpServer({
     name: "agent-bridge",
-    version: "0.2.0",
+    version: "0.3.0",
   });
 
   server.registerTool(
     "bridge_status",
     {
       description:
-        "Return the Agent-Bridge Phase 2 safety boundary. This tool performs no external action.",
+        "Return the Agent-Bridge Phase 3 safety boundary. This tool performs no external action.",
     },
     async () => ({
       content: [
@@ -36,8 +38,9 @@ export function createServer(options: ServerOptions = {}): McpServer {
           type: "text",
           text: JSON.stringify(
             {
-              phase: "phase-2-readonly-github",
+              phase: "phase-3-evidence-handoff-validation",
               liveProviders: ["github.public.read"],
+              noWriteCapabilities: ["evidence_handoff.validation"],
               allowedRepository: ALLOWED_REPOSITORY,
               policy: {
                 directComputerControl: policy.evaluate({
@@ -49,6 +52,10 @@ export function createServer(options: ServerOptions = {}): McpServer {
                 draftPullRequest: policy.evaluate({
                   action: "github.create_draft_pr",
                   repository: ALLOWED_REPOSITORY,
+                }).outcome,
+                handoffFiling: policy.evaluate({
+                  action: "notion.file_evidenced_handoff",
+                  evidenceComplete: false,
                 }).outcome,
               },
             },
@@ -107,6 +114,52 @@ export function createServer(options: ServerOptions = {}): McpServer {
           isError: true,
         };
       }
+    },
+  );
+
+  server.registerTool(
+    "validate_evidence_handoff",
+    {
+      description:
+        "Validate a Grok Evidence Handoff packet and prepare it for Docs. This tool never writes to Notion or sends work to a Bot.",
+      inputSchema: z.object({
+        projectOrScope: z.string().optional(),
+        ownerCraft: z.string().optional(),
+        recordType: z.string().optional(),
+        artifactUrl: z.string().optional(),
+        verify: z.string().optional(),
+        nextOwner: z.string().optional(),
+        summary: z.string().optional(),
+        openBlockerOrApprovalNeeded: z.string().optional(),
+        consequentialClaim: z.boolean().optional(),
+        sourceUrls: z.array(z.string()).optional(),
+      }),
+    },
+    async (input) => {
+      const decision = policy.evaluate({
+        action: "notion.prepare_handoff",
+      });
+
+      if (decision.outcome !== "allow") {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ decision }, null, 2),
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(validateEvidenceHandoff(input), null, 2),
+          },
+        ],
+      };
     },
   );
 
