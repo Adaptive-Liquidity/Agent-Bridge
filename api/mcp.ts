@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
 import { isExpectedBearerToken } from "../src/auth.js";
 import {
+  allowsUnauthenticatedMixedAuth,
   auth0InsufficientScopeWwwAuthenticate,
   auth0WwwAuthenticate,
   resolveAuth0Config,
@@ -13,8 +14,9 @@ type VercelIncomingMessage = IncomingMessage & { body?: unknown };
 
 /**
  * Vercel serverless endpoint. Preview Auth0 JWT auth is used when Auth0 env
- * is present; otherwise the managed public token is required. No fallback or
- * generated secret exists in source.
+ * is present; ChatGPT Mixed discovery methods may skip JWT only when
+ * Authorization is absent. Otherwise the managed public token is required.
+ * No fallback or generated secret exists in source.
  */
 export default async function handler(
   request: VercelIncomingMessage,
@@ -38,25 +40,32 @@ export async function handleMcpRequest(
   }
 
   if (auth0.status === "ready") {
-    const verification = await verifyAuth0Bearer(
-      request.headers.authorization,
-      auth0.config,
-    );
+    if (
+      !allowsUnauthenticatedMixedAuth(
+        request.headers.authorization,
+        request.body,
+      )
+    ) {
+      const verification = await verifyAuth0Bearer(
+        request.headers.authorization,
+        auth0.config,
+      );
 
-    if (verification.status === "insufficient_scope") {
-      response
-        .writeHead(403, {
-          "WWW-Authenticate": auth0InsufficientScopeWwwAuthenticate(),
-        })
-        .end("Insufficient scope.");
-      return;
-    }
+      if (verification.status === "insufficient_scope") {
+        response
+          .writeHead(403, {
+            "WWW-Authenticate": auth0InsufficientScopeWwwAuthenticate(),
+          })
+          .end("Insufficient scope.");
+        return;
+      }
 
-    if (verification.status !== "ok") {
-      response
-        .writeHead(401, { "WWW-Authenticate": auth0WwwAuthenticate() })
-        .end("Authentication required.");
-      return;
+      if (verification.status !== "ok") {
+        response
+          .writeHead(401, { "WWW-Authenticate": auth0WwwAuthenticate() })
+          .end("Authentication required.");
+        return;
+      }
     }
   } else {
     const bearerToken = environment.AGENT_BRIDGE_PUBLIC_TOKEN;

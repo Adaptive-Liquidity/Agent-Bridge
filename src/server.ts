@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
+import { REQUIRED_AUTH0_SCOPE } from "./auth0.js";
 import { validateEvidenceHandoff } from "./handoff.js";
 import { BridgePolicy } from "./policy.js";
 import {
@@ -8,6 +9,13 @@ import {
 } from "./providers.js";
 
 const ALLOWED_REPOSITORY = "Adaptive-Liquidity/Agent-Bridge";
+
+const MIXED_AUTH_TOOL_METADATA = {
+  annotations: { readOnlyHint: true },
+  _meta: {
+    securitySchemes: [{ type: "oauth2", scopes: [REQUIRED_AUTH0_SCOPE] }],
+  },
+} as const;
 
 const policy = new BridgePolicy({
   allowedRepositories: [ALLOWED_REPOSITORY],
@@ -31,6 +39,7 @@ export function createServer(options: ServerOptions = {}): McpServer {
     {
       description:
         "Return the Agent-Bridge Phase 3 safety boundary. This tool performs no external action.",
+      ...MIXED_AUTH_TOOL_METADATA,
     },
     async () => ({
       content: [
@@ -72,6 +81,7 @@ export function createServer(options: ServerOptions = {}): McpServer {
     {
       description:
         "Read the allowlisted Agent-Bridge repository's public metadata. No credential or write capability is used.",
+      ...MIXED_AUTH_TOOL_METADATA,
     },
     async () => {
       const decision = policy.evaluate({
@@ -122,6 +132,7 @@ export function createServer(options: ServerOptions = {}): McpServer {
     {
       description:
         "Validate a Grok Evidence Handoff packet and prepare it for Docs. This tool never writes to Notion or sends work to a Bot.",
+      ...MIXED_AUTH_TOOL_METADATA,
       inputSchema: z.object({
         projectOrScope: z.string().optional(),
         ownerCraft: z.string().optional(),

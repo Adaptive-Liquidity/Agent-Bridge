@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { handleProtectedResourceRequest } from "../api/oauth-protected-resource.js";
@@ -46,6 +47,31 @@ test("protected-resource metadata fails closed on a non-canonical audience", asy
   });
 
   assert.equal(recorded.status, 503);
+});
+
+test("vercel.json rewrites root and path-inserted protected-resource URLs", async () => {
+  const vercel = JSON.parse(await readFile(new URL("../vercel.json", import.meta.url), "utf8")) as {
+    rewrites?: Array<{ source?: string; destination?: string }>;
+  };
+
+  assert.deepEqual(vercel.rewrites, [
+    {
+      source: "/.well-known/oauth-protected-resource",
+      destination: "/api/oauth-protected-resource",
+    },
+    {
+      source: "/.well-known/oauth-protected-resource/api/mcp",
+      destination: "/api/oauth-protected-resource",
+    },
+    {
+      source: "/mcp",
+      destination: "/api/mcp",
+    },
+    {
+      source: "/.well-known/oauth-protected-resource/mcp",
+      destination: "/api/oauth-protected-resource",
+    },
+  ]);
 });
 
 test("protected-resource metadata matches the RFC 9728 preview shape", async () => {
