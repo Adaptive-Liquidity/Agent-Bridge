@@ -40,3 +40,12 @@ export interface EvidenceHandoff {
   nextOwner: "Code" | "Deploy" | "Design" | "Docs" | "Done";
   summary: string;
 }
+
+export interface GitHubRepositorySnapshot {
+  repository: string;
+  htmlUrl: string;
+  visibility: "public" | "private";
+  defaultBranch: string;
+  updatedAt: string | null;
+  pushedAt: string | null;
+}
