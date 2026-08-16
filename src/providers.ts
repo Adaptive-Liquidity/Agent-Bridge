@@ -51,8 +51,11 @@ export class PublicGitHubReadProvider implements GitHubReadProvider {
   async getRepositorySnapshot(
     repository: string,
   ): Promise<GitHubRepositorySnapshot> {
+    const apiBaseUrl = this.apiBaseUrl.endsWith("/")
+      ? this.apiBaseUrl.slice(0, -1)
+      : this.apiBaseUrl;
     const response = await this.fetchFn(
-      `${this.apiBaseUrl.replace(/\\/$/, "")}/repos/${repository}`,
+      `${apiBaseUrl}/repos/${repository}`,
       {
         headers: {
           Accept: "application/vnd.github+json",
