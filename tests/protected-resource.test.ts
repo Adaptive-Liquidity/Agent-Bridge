@@ -63,6 +63,14 @@ test("vercel.json rewrites root and path-inserted protected-resource URLs", asyn
       source: "/.well-known/oauth-protected-resource/api/mcp",
       destination: "/api/oauth-protected-resource",
     },
+    {
+      source: "/mcp",
+      destination: "/api/mcp",
+    },
+    {
+      source: "/.well-known/oauth-protected-resource/mcp",
+      destination: "/api/oauth-protected-resource",
+    },
   ]);
 });
 
