@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { createServer as createNodeHttpServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { pathToFileURL } from "node:url";
 import {
   localhostHostValidation,
   localhostOriginValidation,
@@ -114,9 +115,18 @@ async function handleRequest(
   }
 }
 
-try {
-  startLocalHttpServer();
-} catch (error) {
-  console.error(error instanceof Error ? error.message : "Unable to start local MCP server.");
-  process.exitCode = 1;
+const entryPoint = process.argv[1];
+
+if (
+  entryPoint !== undefined &&
+  import.meta.url === pathToFileURL(entryPoint).href
+) {
+  try {
+    startLocalHttpServer();
+  } catch (error) {
+    console.error(
+      error instanceof Error ? error.message : "Unable to start local MCP server.",
+    );
+    process.exitCode = 1;
+  }
 }
