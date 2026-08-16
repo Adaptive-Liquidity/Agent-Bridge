@@ -6,13 +6,24 @@ Agent-Bridge is a private MCP application that will let authorized ChatGPT conve
 
 It is not a general-purpose automation platform, browser controller, or credential store.
 
-## Phase 3: Evidence Handoff validation
+## Phase 4: loopback-only Streamable HTTP
 
 The current implementation exposes three MCP tools:
 
 - `bridge_status`: reports the active policy boundary without an external call.
 - `github_repository_snapshot`: returns a narrow snapshot of public metadata for the one allowlisted repository, `Adaptive-Liquidity/Agent-Bridge`.
 - `validate_evidence_handoff`: validates a proposed Grok Evidence Handoff and returns a structured packet for Docs, or an explicit missing/invalid-fields result.
+
+It also contains an optional local Streamable HTTP transport. It is deliberately constrained:
+
+- binds only to `127.0.0.1`, never a public interface;
+- accepts only the `/mcp` path;
+- applies localhost Host and Origin validation;
+- requires an exact bearer token from `AGENT_BRIDGE_LOCAL_TOKEN` (32+ characters);
+- is stateless and creates a fresh MCP server/transport per request;
+- has no default secret and refuses to start without one.
+
+This is a development and verification surface only. It is not a public ChatGPT connection. A real remote deployment needs an explicit host, HTTPS, managed secrets, OAuth or equivalent identity, logging, rate limits, and a separate approval before any deployment.
 
 The GitHub provider sends no credential, accepts no credential, and calls only `GET /repos/Adaptive-Liquidity/Agent-Bridge`. Its response is narrowed to repository URL, visibility, default branch, and GitHub timestamps. It has no private-repository, PR, issue, write, browser, or computer access.
 
