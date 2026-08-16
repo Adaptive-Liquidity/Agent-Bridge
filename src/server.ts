@@ -1,5 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/server";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { validateEvidenceHandoff } from "./handoff.js";
 import { BridgePolicy } from "./policy.js";
 import {
@@ -122,7 +122,7 @@ export function createServer(options: ServerOptions = {}): McpServer {
     {
       description:
         "Validate a Grok Evidence Handoff packet and prepare it for Docs. This tool never writes to Notion or sends work to a Bot.",
-      inputSchema: {
+      inputSchema: z.object({
         projectOrScope: z.string().optional(),
         ownerCraft: z.string().optional(),
         recordType: z.string().optional(),
@@ -133,7 +133,7 @@ export function createServer(options: ServerOptions = {}): McpServer {
         openBlockerOrApprovalNeeded: z.string().optional(),
         consequentialClaim: z.boolean().optional(),
         sourceUrls: z.array(z.string()).optional(),
-      },
+      }),
     },
     async (input) => {
       const decision = policy.evaluate({
