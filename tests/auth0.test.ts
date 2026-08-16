@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  auth0InsufficientScopeWwwAuthenticate,
   auth0WwwAuthenticate,
   buildProtectedResourceMetadata,
   CANONICAL_AUTH0_AUDIENCE,
@@ -102,7 +103,7 @@ test("accepts a valid Auth0 access token signed by the mocked JWKS", async (t) =
     jwksUri: TEST_JWKS_URI,
   });
 
-  assert.equal(accepted, true);
+  assert.deepEqual(accepted, { status: "ok" });
 });
 
 test("rejects a token with a bad signature", async (t) => {
@@ -118,7 +119,7 @@ test("rejects a token with a bad signature", async (t) => {
     jwksUri: TEST_JWKS_URI,
   });
 
-  assert.equal(accepted, false);
+  assert.deepEqual(accepted, { status: "unauthorized" });
 });
 
 test("rejects a token with the wrong audience", async (t) => {
@@ -135,7 +136,7 @@ test("rejects a token with the wrong audience", async (t) => {
     jwksUri: TEST_JWKS_URI,
   });
 
-  assert.equal(accepted, false);
+  assert.deepEqual(accepted, { status: "unauthorized" });
 });
 
 test("rejects an expired token", async (t) => {
@@ -152,10 +153,10 @@ test("rejects an expired token", async (t) => {
     jwksUri: TEST_JWKS_URI,
   });
 
-  assert.equal(accepted, false);
+  assert.deepEqual(accepted, { status: "unauthorized" });
 });
 
-test("rejects missing or extra-only scopes", async (t) => {
+test("treats a valid token missing the required scope as insufficient_scope", async (t) => {
   const keys = await generateTestKeyMaterial();
   mockJwksFetch(keys.publicJwk);
   t.after(() => restoreFetch(originalFetch));
@@ -176,9 +177,15 @@ test("rejects missing or extra-only scopes", async (t) => {
     claims: { scope: `${REQUIRED_AUTH0_SCOPE} openid` },
   });
 
-  assert.equal(await verifyAuth0Bearer(`Bearer ${missingScope}`, config), false);
-  assert.equal(await verifyAuth0Bearer(`Bearer ${extraOnly}`, config), false);
-  assert.equal(await verifyAuth0Bearer(`Bearer ${withRequired}`, config), true);
+  assert.deepEqual(await verifyAuth0Bearer(`Bearer ${missingScope}`, config), {
+    status: "insufficient_scope",
+  });
+  assert.deepEqual(await verifyAuth0Bearer(`Bearer ${extraOnly}`, config), {
+    status: "insufficient_scope",
+  });
+  assert.deepEqual(await verifyAuth0Bearer(`Bearer ${withRequired}`, config), {
+    status: "ok",
+  });
 });
 
 test("builds RFC 9728 protected-resource metadata from Auth0 config", () => {
@@ -206,5 +213,13 @@ test("401 challenge points at the absolute protected-resource metadata URL", () 
   assert.equal(
     protectedResourceMetadataUrl(),
     `${CANONICAL_AUTH0_AUDIENCE}/.well-known/oauth-protected-resource`,
+  );
+});
+
+test("403 challenge reports insufficient_scope with the same metadata URL", () => {
+  const metadataParam = ["resource", "metadata"].join("_");
+  assert.equal(
+    auth0InsufficientScopeWwwAuthenticate(),
+    `Bearer error="insufficient_scope", scope="${REQUIRED_AUTH0_SCOPE}", ${metadataParam}="${protectedResourceMetadataUrl()}"`,
   );
 });
