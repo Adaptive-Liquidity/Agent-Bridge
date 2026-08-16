@@ -1,9 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  isExpectedBearerToken,
-  resolveLocalHttpConfig,
-} from "../src/local-http.js";
+import { isExpectedBearerToken } from "../src/auth.js";
+import { resolveLocalHttpConfig } from "../src/local-http.js";
 
 test("requires a sufficiently long local bearer token", () => {
   assert.throws(
