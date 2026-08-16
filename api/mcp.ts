@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
 import { isExpectedBearerToken } from "../src/auth.js";
 import {
+  auth0InsufficientScopeWwwAuthenticate,
   auth0WwwAuthenticate,
   resolveAuth0Config,
   verifyAuth0Bearer,
@@ -37,12 +38,21 @@ export async function handleMcpRequest(
   }
 
   if (auth0.status === "ready") {
-    const authorized = await verifyAuth0Bearer(
+    const verification = await verifyAuth0Bearer(
       request.headers.authorization,
       auth0.config,
     );
 
-    if (!authorized) {
+    if (verification.status === "insufficient_scope") {
+      response
+        .writeHead(403, {
+          "WWW-Authenticate": auth0InsufficientScopeWwwAuthenticate(),
+        })
+        .end("Insufficient scope.");
+      return;
+    }
+
+    if (verification.status !== "ok") {
       response
         .writeHead(401, { "WWW-Authenticate": auth0WwwAuthenticate() })
         .end("Authentication required.");

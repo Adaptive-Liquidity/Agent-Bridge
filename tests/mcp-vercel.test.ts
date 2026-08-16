@@ -4,8 +4,10 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
 import { handleMcpRequest } from "../api/mcp.js";
 import {
+  auth0InsufficientScopeWwwAuthenticate,
   auth0WwwAuthenticate,
   CANONICAL_AUTH0_AUDIENCE,
+  REQUIRED_AUTH0_SCOPE,
 } from "../src/auth0.js";
 import {
   generateTestKeyMaterial,
@@ -172,6 +174,160 @@ test("Auth0 preview path does not accept AGENT_BRIDGE_PUBLIC_TOKEN as a substitu
     ),
     true,
   );
+  assert.equal(handleRequest.mock.calls.length, 0);
+});
+
+test("Auth0 preview path returns 403 when a valid JWT is missing the required scope", async (t) => {
+  const keys = await generateTestKeyMaterial();
+  mockJwksFetch(keys.publicJwk);
+  t.after(() => restoreFetch(originalFetch));
+
+  const handleRequest = mock.method(
+    NodeStreamableHTTPServerTransport.prototype,
+    "handleRequest",
+    async () => undefined,
+  );
+  t.after(() => {
+    handleRequest.mock.restore();
+  });
+
+  const token = await signAccessToken(keys.privateKey, {
+    claims: { scope: "" },
+  });
+  const { response, recorded } = createResponse();
+  await handleMcpRequest(
+    {
+      headers: { authorization: `Bearer ${token}` },
+      body: { jsonrpc: "2.0", id: 6, method: "tools/list" },
+    } as IncomingMessage & { body?: unknown },
+    response,
+    auth0PreviewEnv,
+  );
+
+  assert.equal(recorded.status, 403);
+  assert.equal(
+    recorded.headers?.["WWW-Authenticate"],
+    auth0InsufficientScopeWwwAuthenticate(),
+  );
+  assert.equal(
+    recorded.headers?.["WWW-Authenticate"],
+    `Bearer error="insufficient_scope", scope="${REQUIRED_AUTH0_SCOPE}", ${["resource", "metadata"].join("_")}="${CANONICAL_AUTH0_AUDIENCE}/.well-known/oauth-protected-resource"`,
+  );
+  assert.equal(handleRequest.mock.calls.length, 0);
+});
+
+test("Auth0 preview path returns 403 when a valid JWT has only other scopes", async (t) => {
+  const keys = await generateTestKeyMaterial();
+  mockJwksFetch(keys.publicJwk);
+  t.after(() => restoreFetch(originalFetch));
+
+  const handleRequest = mock.method(
+    NodeStreamableHTTPServerTransport.prototype,
+    "handleRequest",
+    async () => undefined,
+  );
+  t.after(() => {
+    handleRequest.mock.restore();
+  });
+
+  const token = await signAccessToken(keys.privateKey, {
+    claims: { scope: "openid profile" },
+  });
+  const { response, recorded } = createResponse();
+  await handleMcpRequest(
+    {
+      headers: { authorization: `Bearer ${token}` },
+      body: { jsonrpc: "2.0", id: 7, method: "tools/list" },
+    } as IncomingMessage & { body?: unknown },
+    response,
+    auth0PreviewEnv,
+  );
+
+  assert.equal(recorded.status, 403);
+  assert.equal(
+    recorded.headers?.["WWW-Authenticate"],
+    auth0InsufficientScopeWwwAuthenticate(),
+  );
+  assert.equal(handleRequest.mock.calls.length, 0);
+});
+
+test("Auth0 preview path still accepts a JWT that includes the required scope", async (t) => {
+  const keys = await generateTestKeyMaterial();
+  mockJwksFetch(keys.publicJwk);
+  t.after(() => restoreFetch(originalFetch));
+
+  const handleRequest = mock.method(
+    NodeStreamableHTTPServerTransport.prototype,
+    "handleRequest",
+    async () => undefined,
+  );
+  t.after(() => {
+    handleRequest.mock.restore();
+  });
+
+  const token = await signAccessToken(keys.privateKey, {
+    claims: { scope: `${REQUIRED_AUTH0_SCOPE} openid` },
+  });
+  const { response, recorded } = createResponse();
+  await handleMcpRequest(
+    {
+      headers: { authorization: `Bearer ${token}` },
+      body: { jsonrpc: "2.0", id: 8, method: "tools/list" },
+    } as IncomingMessage & { body?: unknown },
+    response,
+    auth0PreviewEnv,
+  );
+
+  assert.equal(recorded.status, undefined);
+  assert.equal(handleRequest.mock.calls.length, 1);
+});
+
+test("Auth0 preview path keeps 401 for invalid, expired, and wrong-audience JWTs", async (t) => {
+  const valid = await generateTestKeyMaterial();
+  const other = await generateTestKeyMaterial();
+  mockJwksFetch(valid.publicJwk);
+  t.after(() => restoreFetch(originalFetch));
+
+  const handleRequest = mock.method(
+    NodeStreamableHTTPServerTransport.prototype,
+    "handleRequest",
+    async () => undefined,
+  );
+  t.after(() => {
+    handleRequest.mock.restore();
+  });
+
+  const invalidToken = await signAccessToken(other.privateKey);
+  const expiredToken = await signAccessToken(valid.privateKey, {
+    expirationTime: 0,
+  });
+  const wrongAudienceToken = await signAccessToken(valid.privateKey, {
+    audience: "https://wrong-audience.example",
+  });
+  const wrongIssuerToken = await signAccessToken(valid.privateKey, {
+    issuer: "https://other-tenant.auth0.com/",
+  });
+
+  for (const token of [
+    invalidToken,
+    expiredToken,
+    wrongAudienceToken,
+    wrongIssuerToken,
+  ]) {
+    const { response, recorded } = createResponse();
+    await handleMcpRequest(
+      {
+        headers: { authorization: `Bearer ${token}` },
+        body: { jsonrpc: "2.0", id: 9, method: "tools/list" },
+      } as IncomingMessage & { body?: unknown },
+      response,
+      auth0PreviewEnv,
+    );
+
+    assert.equal(recorded.status, 401);
+    assert.equal(recorded.headers?.["WWW-Authenticate"], auth0WwwAuthenticate());
+  }
+
   assert.equal(handleRequest.mock.calls.length, 0);
 });
 

@@ -19,6 +19,11 @@ export type Auth0ConfigResolution =
   | { status: "invalid" }
   | { status: "ready"; config: Auth0Config };
 
+export type Auth0BearerVerification =
+  | { status: "ok" }
+  | { status: "unauthorized" }
+  | { status: "insufficient_scope" };
+
 export interface ProtectedResourceMetadata {
   resource: string;
   authorization_servers: [string];
@@ -44,6 +49,10 @@ const RFC9728_METADATA_PARAM = ["resource", "metadata"].join("_");
 
 export function auth0WwwAuthenticate(): string {
   return `Bearer ${RFC9728_METADATA_PARAM}="${protectedResourceMetadataUrl()}", scope="${REQUIRED_AUTH0_SCOPE}"`;
+}
+
+export function auth0InsufficientScopeWwwAuthenticate(): string {
+  return `Bearer error="insufficient_scope", scope="${REQUIRED_AUTH0_SCOPE}", ${RFC9728_METADATA_PARAM}="${protectedResourceMetadataUrl()}"`;
 }
 
 export function resolveAuth0Config(
@@ -85,11 +94,11 @@ export function buildProtectedResourceMetadata(
 export async function verifyAuth0Bearer(
   authorization: string | string[] | undefined,
   config: Auth0Config,
-): Promise<boolean> {
+): Promise<Auth0BearerVerification> {
   const token = extractBearerToken(authorization);
 
   if (token === undefined) {
-    return false;
+    return { status: "unauthorized" };
   }
 
   try {
@@ -98,9 +107,17 @@ export async function verifyAuth0Bearer(
       audience: config.audience,
     });
 
-    return hasExactAudience(payload.aud) && hasRequiredScope(payload);
+    if (!hasExactAudience(payload.aud)) {
+      return { status: "unauthorized" };
+    }
+
+    if (!hasRequiredScope(payload)) {
+      return { status: "insufficient_scope" };
+    }
+
+    return { status: "ok" };
   } catch {
-    return false;
+    return { status: "unauthorized" };
   }
 }
 
