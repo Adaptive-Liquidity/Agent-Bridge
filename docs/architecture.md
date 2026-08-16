@@ -6,19 +6,22 @@ Agent-Bridge is a private MCP application that will let authorized ChatGPT conve
 
 It is not a general-purpose automation platform, browser controller, or credential store.
 
-## Phase 1: safe foundation
+## Phase 2: read-only GitHub
 
-The current implementation exposes one read-only MCP tool: `bridge_status`.
+The current implementation exposes two MCP tools:
 
-It also introduces the typed policy layer and provider contracts that later integrations must use:
+- `bridge_status`: reports the active policy boundary without an external call.
+- `github_repository_snapshot`: returns a narrow snapshot of public metadata for the one allowlisted repository, `Adaptive-Liquidity/Agent-Bridge`.
 
-1. The MCP tool receives a narrow request.
+The GitHub provider sends no credential, accepts no credential, and calls only `GET /repos/Adaptive-Liquidity/Agent-Bridge`. Its response is narrowed to repository URL, visibility, default branch, and GitHub timestamps. It has no private-repository, PR, issue, write, browser, or computer access.
+
+Every provider request follows this order:
+
+1. The MCP tool constructs a narrow request.
 2. `BridgePolicy` classifies it as `allow`, `approval_required`, or `deny`.
 3. Only an allowed request may reach a provider adapter.
 4. A provider returns structured evidence, never free-form authority.
 5. An Evidence Handoff packet records the outcome in Notion only when complete.
-
-No provider is wired in Phase 1. No credentials are read, written, or accepted.
 
 ## Planned provider order
 
