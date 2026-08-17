@@ -1,9 +1,25 @@
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 
-export const CANONICAL_AUTH0_AUDIENCE =
-  "https://agent-bridge-oauth-preview-adaptive-liquidity-labs.vercel.app";
+export const CANONICAL_AUTH0_AUDIENCE = "https://agent-bridge-phi.vercel.app";
 
 export const CANONICAL_AUTH0_MCP_AUDIENCE = `${CANONICAL_AUTH0_AUDIENCE}/api/mcp`;
+
+export const TRANSITIONAL_AUTH0_AUDIENCE =
+  "https://agent-bridge-oauth-preview-adaptive-liquidity-labs.vercel.app";
+
+export const TRANSITIONAL_AUTH0_MCP_AUDIENCE = `${TRANSITIONAL_AUTH0_AUDIENCE}/api/mcp`;
+
+export const ACCEPTED_AUTH0_ENV_AUDIENCES = [
+  CANONICAL_AUTH0_AUDIENCE,
+  TRANSITIONAL_AUTH0_AUDIENCE,
+] as const;
+
+export const ACCEPTED_AUTH0_JWT_AUDIENCES = [
+  CANONICAL_AUTH0_AUDIENCE,
+  CANONICAL_AUTH0_MCP_AUDIENCE,
+  TRANSITIONAL_AUTH0_AUDIENCE,
+  TRANSITIONAL_AUTH0_MCP_AUDIENCE,
+] as const;
 
 export const REQUIRED_AUTH0_SCOPE = "agent-bridge.read";
 
@@ -112,7 +128,7 @@ export function resolveAuth0Config(
     return { status: "unconfigured" };
   }
 
-  if (issuer === undefined || audience !== CANONICAL_AUTH0_AUDIENCE) {
+  if (issuer === undefined || !isAcceptedEnvAudience(audience)) {
     return { status: "invalid" };
   }
 
@@ -150,7 +166,7 @@ export async function verifyAuth0Bearer(
   try {
     const { payload } = await jwtVerify(token, getRemoteJwks(config.jwksUri), {
       issuer: config.issuer,
-      audience: [CANONICAL_AUTH0_AUDIENCE, CANONICAL_AUTH0_MCP_AUDIENCE],
+      audience: [...ACCEPTED_AUTH0_JWT_AUDIENCES],
     });
 
     if (!hasExactAudience(payload.aud)) {
@@ -196,8 +212,17 @@ function extractBearerToken(
   return token.length > 0 ? token : undefined;
 }
 
+function isAcceptedEnvAudience(
+  audience: string | undefined,
+): audience is (typeof ACCEPTED_AUTH0_ENV_AUDIENCES)[number] {
+  return (
+    audience !== undefined &&
+    (ACCEPTED_AUTH0_ENV_AUDIENCES as readonly string[]).includes(audience)
+  );
+}
+
 function isAcceptedAudience(aud: string): boolean {
-  return aud === CANONICAL_AUTH0_AUDIENCE || aud === CANONICAL_AUTH0_MCP_AUDIENCE;
+  return (ACCEPTED_AUTH0_JWT_AUDIENCES as readonly string[]).includes(aud);
 }
 
 function hasExactAudience(aud: JWTPayload["aud"]): boolean {
