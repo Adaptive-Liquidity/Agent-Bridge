@@ -42,6 +42,18 @@ test("rejects incomplete Notion handoffs", () => {
   assert.equal(decision.outcome, "deny");
 });
 
+test("allows grok list, status, and confirm-gated send", () => {
+  assert.equal(policy.evaluate({ action: "grok.list_bots" }).outcome, "allow");
+  assert.equal(
+    policy.evaluate({ action: "grok.get_instruction" }).outcome,
+    "allow",
+  );
+  assert.equal(
+    policy.evaluate({ action: "grok.send_instruction" }).outcome,
+    "allow",
+  );
+});
+
 test("always rejects shared computer control", () => {
   const decision = policy.evaluate({
     action: "computer.control",

@@ -5,6 +5,8 @@ import {
   allowsUnauthenticatedMixedAuth,
   auth0InsufficientScopeWwwAuthenticate,
   auth0WwwAuthenticate,
+  isConfirmedGrokBotSend,
+  REQUIRED_AUTH0_WRITE_SCOPE,
   resolveAuth0Config,
   verifyAuth0Bearer,
 } from "../src/auth0.js";
@@ -49,6 +51,9 @@ export async function handleMcpRequest(
       const verification = await verifyAuth0Bearer(
         request.headers.authorization,
         auth0.config,
+        isConfirmedGrokBotSend(request.body)
+          ? [REQUIRED_AUTH0_WRITE_SCOPE]
+          : [],
       );
 
       if (verification.status === "insufficient_scope") {
@@ -89,7 +94,7 @@ export async function handleMcpRequest(
     const transport = new NodeStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
     });
-    await createMcpServer().connect(transport);
+    await createMcpServer({ environment }).connect(transport);
     await transport.handleRequest(request, response, request.body);
   } catch {
     if (!response.headersSent) {

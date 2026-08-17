@@ -1,5 +1,8 @@
 export type BridgeAction =
   | "bridge.status"
+  | "grok.list_bots"
+  | "grok.send_instruction"
+  | "grok.get_instruction"
   | "github.read"
   | "github.create_draft_pr"
   | "cursor.start_scoped_run"
