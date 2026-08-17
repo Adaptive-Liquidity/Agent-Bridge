@@ -6,6 +6,7 @@ import { handleProtectedResourceRequest } from "../api/oauth-protected-resource.
 import {
   CANONICAL_AUTH0_AUDIENCE,
   REQUIRED_AUTH0_SCOPE,
+  REQUIRED_AUTH0_WRITE_SCOPE,
   TRANSITIONAL_AUTH0_AUDIENCE,
 } from "../src/auth0.js";
 import { TEST_ISSUER, TEST_JWKS_URI } from "./auth0-test-support.js";
@@ -88,7 +89,7 @@ test("protected-resource metadata publishes the public phi resource", async () =
   assert.deepEqual(JSON.parse(recorded.body ?? ""), {
     resource: "https://agent-bridge-phi.vercel.app",
     authorization_servers: [TEST_ISSUER],
-    scopes_supported: [REQUIRED_AUTH0_SCOPE],
+    scopes_supported: [REQUIRED_AUTH0_SCOPE, REQUIRED_AUTH0_WRITE_SCOPE],
     bearer_methods_supported: ["header"],
   });
 });
@@ -105,7 +106,7 @@ test("protected-resource metadata stays ready on the transitional oauth-preview 
   assert.deepEqual(JSON.parse(recorded.body ?? ""), {
     resource: "https://agent-bridge-phi.vercel.app",
     authorization_servers: [TEST_ISSUER],
-    scopes_supported: [REQUIRED_AUTH0_SCOPE],
+    scopes_supported: [REQUIRED_AUTH0_SCOPE, REQUIRED_AUTH0_WRITE_SCOPE],
     bearer_methods_supported: ["header"],
   });
 });

@@ -115,15 +115,25 @@ test("send without confirm does not POST through a gateway fetch spy", async () 
           NOEMA_GATEWAY_TOKEN: "test-gateway-token-fixture",
         },
       }),
-      async (request) =>
-        request("tools/call", {
+      async (request) => {
+        await request("tools/call", {
           name: "send_instruction_to_grok_bot",
           arguments: {
             target: "noema",
             instruction: "Summarize the latest handoff.",
             actor: "caelin",
           },
-        }),
+        });
+        await request("tools/call", {
+          name: "send_instruction_to_grok_bot",
+          arguments: {
+            target: "noema",
+            instruction: "Summarize the latest handoff.",
+            actor: "caelin",
+            confirm: false,
+          },
+        });
+      },
     );
   } finally {
     globalThis.fetch = originalFetch;

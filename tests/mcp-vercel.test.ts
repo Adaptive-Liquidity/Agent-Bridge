@@ -480,7 +480,7 @@ test("Auth0 preview path returns 403 when a valid JWT is missing the required sc
   );
   assert.equal(
     recorded.headers?.["WWW-Authenticate"],
-    `Bearer error="insufficient_scope", scope="${REQUIRED_AUTH0_SCOPE}", ${["resource", "metadata"].join("_")}="${PHI_RESOURCE_METADATA_URL}"`,
+    `Bearer error="insufficient_scope", scope="${REQUIRED_AUTH0_SCOPE} ${REQUIRED_AUTH0_WRITE_SCOPE}", ${["resource", "metadata"].join("_")}="${PHI_RESOURCE_METADATA_URL}"`,
   );
   assert.equal(handleRequest.mock.calls.length, 0);
 });
@@ -643,6 +643,10 @@ test("confirmed grok send with a valid JWT missing write is 403 insufficient_sco
     recorded.headers?.["WWW-Authenticate"],
     auth0InsufficientScopeWwwAuthenticate(),
   );
+  assert.match(
+    recorded.headers?.["WWW-Authenticate"] ?? "",
+    /scope="[^"]*\bagent-bridge\.write\b/,
+  );
   assert.equal(handleRequest.mock.calls.length, 0);
 });
 
@@ -715,6 +719,18 @@ test("list and unconfirmed send still forward with the read scope", async (t) =>
         arguments: { target: "noema", instruction: "Go", actor: "caelin" },
       },
     ],
+    [
+      44,
+      {
+        name: "send_instruction_to_grok_bot",
+        arguments: {
+          target: "noema",
+          instruction: "Go",
+          actor: "caelin",
+          confirm: false,
+        },
+      },
+    ],
   ] as const) {
     const { response, recorded } = createResponse();
     await handleMcpRequest(
@@ -728,7 +744,7 @@ test("list and unconfirmed send still forward with the read scope", async (t) =>
     assert.equal(recorded.status, undefined, String(id));
   }
 
-  assert.equal(handleRequest.mock.calls.length, 3);
+  assert.equal(handleRequest.mock.calls.length, 4);
 });
 
 test("confirmed grok send forwards when the JWT includes write", async (t) => {

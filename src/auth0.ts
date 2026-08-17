@@ -25,6 +25,11 @@ export const REQUIRED_AUTH0_SCOPE = "agent-bridge.read";
 
 export const REQUIRED_AUTH0_WRITE_SCOPE = "agent-bridge.write";
 
+export const ADVERTISED_AUTH0_SCOPES = [
+  REQUIRED_AUTH0_SCOPE,
+  REQUIRED_AUTH0_WRITE_SCOPE,
+] as const;
+
 export const GROK_SEND_INSTRUCTION_TOOL = "send_instruction_to_grok_bot";
 
 export const MIXED_AUTH_UNAUTHENTICATED_METHODS = [
@@ -59,7 +64,7 @@ export type Auth0BearerVerification =
 export interface ProtectedResourceMetadata {
   resource: string;
   authorization_servers: [string];
-  scopes_supported: [typeof REQUIRED_AUTH0_SCOPE];
+  scopes_supported: typeof ADVERTISED_AUTH0_SCOPES;
   bearer_methods_supported: ["header"];
 }
 
@@ -79,8 +84,12 @@ export function protectedResourceMetadataUrl(): string {
 
 const RFC9728_METADATA_PARAM = ["resource", "metadata"].join("_");
 
+function advertisedScopeChallenge(): string {
+  return ADVERTISED_AUTH0_SCOPES.join(" ");
+}
+
 export function auth0WwwAuthenticate(): string {
-  return `Bearer ${RFC9728_METADATA_PARAM}="${protectedResourceMetadataUrl()}", scope="${REQUIRED_AUTH0_SCOPE}", error="invalid_token", error_description="Authentication required"`;
+  return `Bearer ${RFC9728_METADATA_PARAM}="${protectedResourceMetadataUrl()}", scope="${advertisedScopeChallenge()}", error="invalid_token", error_description="Authentication required"`;
 }
 
 export function readJsonRpcMethod(body: unknown): string | undefined {
@@ -145,7 +154,7 @@ export function isConfirmedGrokBotSend(body: unknown): boolean {
 }
 
 export function auth0InsufficientScopeWwwAuthenticate(): string {
-  return `Bearer error="insufficient_scope", scope="${REQUIRED_AUTH0_SCOPE}", ${RFC9728_METADATA_PARAM}="${protectedResourceMetadataUrl()}"`;
+  return `Bearer error="insufficient_scope", scope="${advertisedScopeChallenge()}", ${RFC9728_METADATA_PARAM}="${protectedResourceMetadataUrl()}"`;
 }
 
 export function resolveAuth0Config(
@@ -179,7 +188,7 @@ export function buildProtectedResourceMetadata(
   return {
     resource: CANONICAL_AUTH0_AUDIENCE,
     authorization_servers: [config.issuer],
-    scopes_supported: [REQUIRED_AUTH0_SCOPE],
+    scopes_supported: ADVERTISED_AUTH0_SCOPES,
     bearer_methods_supported: ["header"],
   };
 }

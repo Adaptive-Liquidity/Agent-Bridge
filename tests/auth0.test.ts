@@ -336,7 +336,7 @@ test("builds RFC 9728 protected-resource metadata from Auth0 config", () => {
     {
       resource: "https://agent-bridge-phi.vercel.app",
       authorization_servers: [TEST_ISSUER],
-      scopes_supported: [REQUIRED_AUTH0_SCOPE],
+      scopes_supported: [REQUIRED_AUTH0_SCOPE, REQUIRED_AUTH0_WRITE_SCOPE],
       bearer_methods_supported: ["header"],
     },
   );
@@ -344,13 +344,14 @@ test("builds RFC 9728 protected-resource metadata from Auth0 config", () => {
 
 test("401 challenge points at the public phi protected-resource metadata URL", () => {
   const metadataParam = ["resource", "metadata"].join("_");
+  const advertisedScopes = `${REQUIRED_AUTH0_SCOPE} ${REQUIRED_AUTH0_WRITE_SCOPE}`;
   assert.equal(
     protectedResourceMetadataUrl(),
     "https://agent-bridge-phi.vercel.app/.well-known/oauth-protected-resource",
   );
   assert.equal(
     auth0WwwAuthenticate(),
-    `Bearer ${metadataParam}="${protectedResourceMetadataUrl()}", scope="${REQUIRED_AUTH0_SCOPE}", error="invalid_token", error_description="Authentication required"`,
+    `Bearer ${metadataParam}="${protectedResourceMetadataUrl()}", scope="${advertisedScopes}", error="invalid_token", error_description="Authentication required"`,
   );
 });
 
@@ -395,8 +396,11 @@ test("allows unauthenticated Mixed discovery methods only without Authorization"
 
 test("403 challenge reports insufficient_scope with the same metadata URL", () => {
   const metadataParam = ["resource", "metadata"].join("_");
+  const advertisedScopes = `${REQUIRED_AUTH0_SCOPE} ${REQUIRED_AUTH0_WRITE_SCOPE}`;
+  const challenge = auth0InsufficientScopeWwwAuthenticate();
   assert.equal(
-    auth0InsufficientScopeWwwAuthenticate(),
-    `Bearer error="insufficient_scope", scope="${REQUIRED_AUTH0_SCOPE}", ${metadataParam}="${protectedResourceMetadataUrl()}"`,
+    challenge,
+    `Bearer error="insufficient_scope", scope="${advertisedScopes}", ${metadataParam}="${protectedResourceMetadataUrl()}"`,
   );
+  assert.match(challenge, /scope="[^"]*\bagent-bridge\.write\b/);
 });
