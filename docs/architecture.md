@@ -6,20 +6,22 @@ Agent-Bridge is a private MCP application that will let authorized ChatGPT conve
 
 It is not a general-purpose automation platform, browser controller, or credential store.
 
-## Phase 5: disabled serverless endpoint
+## Phase 6: confirm-gated Grok bot tools
 
-The current implementation exposes three MCP tools:
+The current implementation exposes the original three MCP tools plus confirm-gated Grok bot tools:
 
 - `bridge_status`: reports the active policy boundary without an external call.
 - `github_repository_snapshot`: returns a narrow snapshot of public metadata for the one allowlisted repository, `Adaptive-Liquidity/Agent-Bridge`.
 - `validate_evidence_handoff`: validates a proposed Grok Evidence Handoff and returns a structured packet for Docs, or an explicit missing/invalid-fields result.
+- `list_grok_bots` / `get_grok_bot_status`: read the configured Noema gateway with `agent-bridge.read`.
+- `send_instruction_to_grok_bot`: returns a preview until `confirm=true`, then posts `{ target, instruction, idempotency_key, source: "agent-bridge", actor }` using `agent-bridge.write`. Gateway URL and token come only from `NOEMA_GATEWAY_URL` and `NOEMA_GATEWAY_TOKEN`.
 
 It includes two HTTP transports:
 
 - a loopback-only local transport, for development and verification;
 - a Vercel-compatible `api/mcp.ts` function that is inert until `AGENT_BRIDGE_PUBLIC_TOKEN` exists in a managed environment.
 
-The public function never creates or defaults a secret. Without a 32+ character managed token, every request receives `503`. With a token it requires an exact bearer header, uses a stateless MCP transport, and exposes only the existing tool surface. It does not add a provider, write path, Grok Bot control path, or browser/computer control.
+The public function never creates or defaults a secret. Without a 32+ character managed token, every request receives `503`. Auth0 preview JWT auth remains fail-closed for `tools/call`. The Grok tools fail closed when gateway env is missing and never invent a URL or token. Browser and computer control remain absent.
 
 No Vercel project, secret, domain, or deployment is created by this phase. A live connection requires a separate approval to create a project, set a managed secret, deploy a preview, verify it, then decide whether to create a ChatGPT connection.
 

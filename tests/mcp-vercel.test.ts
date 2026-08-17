@@ -10,6 +10,7 @@ import {
   CANONICAL_AUTH0_AUDIENCE,
   protectedResourceMetadataUrl,
   REQUIRED_AUTH0_SCOPE,
+  REQUIRED_AUTH0_WRITE_SCOPE,
   TRANSITIONAL_AUTH0_AUDIENCE,
 } from "../src/auth0.js";
 import {
@@ -597,6 +598,181 @@ test("Auth0 preview path keeps 401 for invalid, expired, and wrong-audience JWTs
   }
 
   assert.equal(handleRequest.mock.calls.length, 0);
+});
+
+test("confirmed grok send with a valid JWT missing write is 403 insufficient_scope", async (t) => {
+  const keys = await generateTestKeyMaterial();
+  mockJwksFetch(keys.publicJwk);
+  t.after(() => restoreFetch(originalFetch));
+
+  const handleRequest = mock.method(
+    NodeStreamableHTTPServerTransport.prototype,
+    "handleRequest",
+    async () => undefined,
+  );
+  t.after(() => {
+    handleRequest.mock.restore();
+  });
+
+  const token = await signAccessToken(keys.privateKey);
+  const { response, recorded } = createResponse();
+  await handleMcpRequest(
+    {
+      headers: { authorization: `Bearer ${token}` },
+      body: {
+        jsonrpc: "2.0",
+        id: 30,
+        method: "tools/call",
+        params: {
+          name: "send_instruction_to_grok_bot",
+          arguments: {
+            target: "noema",
+            instruction: "Summarize the latest handoff.",
+            actor: "caelin",
+            confirm: true,
+          },
+        },
+      },
+    } as IncomingMessage & { body?: unknown },
+    response,
+    auth0PreviewEnv,
+  );
+
+  assert.equal(recorded.status, 403);
+  assert.equal(
+    recorded.headers?.["WWW-Authenticate"],
+    auth0InsufficientScopeWwwAuthenticate(),
+  );
+  assert.equal(handleRequest.mock.calls.length, 0);
+});
+
+test("confirmed grok send without a JWT is 401 and an invalid JWT is 401", async (t) => {
+  const handleRequest = mock.method(
+    NodeStreamableHTTPServerTransport.prototype,
+    "handleRequest",
+    async () => undefined,
+  );
+  t.after(() => {
+    handleRequest.mock.restore();
+  });
+
+  const confirmedSend = {
+    jsonrpc: "2.0",
+    method: "tools/call",
+    params: {
+      name: "send_instruction_to_grok_bot",
+      arguments: { target: "noema", instruction: "Go", actor: "caelin", confirm: true },
+    },
+  };
+
+  const missing = createResponse();
+  await handleMcpRequest(
+    { headers: {}, body: { ...confirmedSend, id: 31 } } as IncomingMessage & {
+      body?: unknown;
+    },
+    missing.response,
+    auth0PreviewEnv,
+  );
+  assert.equal(missing.recorded.status, 401);
+  assert.equal(missing.recorded.headers?.["WWW-Authenticate"], auth0WwwAuthenticate());
+
+  const invalid = createResponse();
+  await handleMcpRequest(
+    {
+      headers: { authorization: "Bearer not-a-jwt" },
+      body: { ...confirmedSend, id: 32 },
+    } as IncomingMessage & { body?: unknown },
+    invalid.response,
+    auth0PreviewEnv,
+  );
+  assert.equal(invalid.recorded.status, 401);
+  assert.equal(handleRequest.mock.calls.length, 0);
+});
+
+test("list and unconfirmed send still forward with the read scope", async (t) => {
+  const keys = await generateTestKeyMaterial();
+  mockJwksFetch(keys.publicJwk);
+  t.after(() => restoreFetch(originalFetch));
+
+  const handleRequest = mock.method(
+    NodeStreamableHTTPServerTransport.prototype,
+    "handleRequest",
+    async () => undefined,
+  );
+  t.after(() => {
+    handleRequest.mock.restore();
+  });
+
+  const token = await signAccessToken(keys.privateKey);
+
+  for (const [id, params] of [
+    [40, { name: "list_grok_bots" }],
+    [41, { name: "get_grok_bot_status", arguments: { id: "instr-1" } }],
+    [
+      42,
+      {
+        name: "send_instruction_to_grok_bot",
+        arguments: { target: "noema", instruction: "Go", actor: "caelin" },
+      },
+    ],
+  ] as const) {
+    const { response, recorded } = createResponse();
+    await handleMcpRequest(
+      {
+        headers: { authorization: `Bearer ${token}` },
+        body: { jsonrpc: "2.0", id, method: "tools/call", params },
+      } as IncomingMessage & { body?: unknown },
+      response,
+      auth0PreviewEnv,
+    );
+    assert.equal(recorded.status, undefined, String(id));
+  }
+
+  assert.equal(handleRequest.mock.calls.length, 3);
+});
+
+test("confirmed grok send forwards when the JWT includes write", async (t) => {
+  const keys = await generateTestKeyMaterial();
+  mockJwksFetch(keys.publicJwk);
+  t.after(() => restoreFetch(originalFetch));
+
+  const handleRequest = mock.method(
+    NodeStreamableHTTPServerTransport.prototype,
+    "handleRequest",
+    async () => undefined,
+  );
+  t.after(() => {
+    handleRequest.mock.restore();
+  });
+
+  const token = await signAccessToken(keys.privateKey, {
+    claims: { scope: `${REQUIRED_AUTH0_SCOPE} ${REQUIRED_AUTH0_WRITE_SCOPE}` },
+  });
+  const { response, recorded } = createResponse();
+  await handleMcpRequest(
+    {
+      headers: { authorization: `Bearer ${token}` },
+      body: {
+        jsonrpc: "2.0",
+        id: 43,
+        method: "tools/call",
+        params: {
+          name: "send_instruction_to_grok_bot",
+          arguments: {
+            target: "noema",
+            instruction: "Go",
+            actor: "caelin",
+            confirm: true,
+          },
+        },
+      },
+    } as IncomingMessage & { body?: unknown },
+    response,
+    auth0PreviewEnv,
+  );
+
+  assert.equal(recorded.status, undefined);
+  assert.equal(handleRequest.mock.calls.length, 1);
 });
 
 test("misconfigured Auth0 audience fails closed and does not use the public token", async (t) => {

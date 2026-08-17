@@ -23,6 +23,10 @@ export const ACCEPTED_AUTH0_JWT_AUDIENCES = [
 
 export const REQUIRED_AUTH0_SCOPE = "agent-bridge.read";
 
+export const REQUIRED_AUTH0_WRITE_SCOPE = "agent-bridge.write";
+
+export const GROK_SEND_INSTRUCTION_TOOL = "send_instruction_to_grok_bot";
+
 export const MIXED_AUTH_UNAUTHENTICATED_METHODS = [
   "initialize",
   "notifications/initialized",
@@ -113,6 +117,33 @@ export function allowsUnauthenticatedMixedAuth(
   );
 }
 
+export function isConfirmedGrokBotSend(body: unknown): boolean {
+  if (readJsonRpcMethod(body) !== "tools/call") {
+    return false;
+  }
+
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return false;
+  }
+
+  const params = (body as { params?: unknown }).params;
+  if (params === null || typeof params !== "object" || Array.isArray(params)) {
+    return false;
+  }
+
+  const name = (params as { name?: unknown }).name;
+  if (name !== GROK_SEND_INSTRUCTION_TOOL) {
+    return false;
+  }
+
+  const args = (params as { arguments?: unknown }).arguments;
+  if (args === null || typeof args !== "object" || Array.isArray(args)) {
+    return false;
+  }
+
+  return (args as { confirm?: unknown }).confirm === true;
+}
+
 export function auth0InsufficientScopeWwwAuthenticate(): string {
   return `Bearer error="insufficient_scope", scope="${REQUIRED_AUTH0_SCOPE}", ${RFC9728_METADATA_PARAM}="${protectedResourceMetadataUrl()}"`;
 }
@@ -156,6 +187,7 @@ export function buildProtectedResourceMetadata(
 export async function verifyAuth0Bearer(
   authorization: string | string[] | undefined,
   config: Auth0Config,
+  additionalScopes: readonly string[] = [],
 ): Promise<Auth0BearerVerification> {
   const token = extractBearerToken(authorization);
 
@@ -173,7 +205,7 @@ export async function verifyAuth0Bearer(
       return { status: "unauthorized" };
     }
 
-    if (!hasRequiredScope(payload)) {
+    if (!hasRequiredScope(payload, additionalScopes)) {
       return { status: "insufficient_scope" };
     }
 
@@ -234,8 +266,14 @@ function hasExactAudience(aud: JWTPayload["aud"]): boolean {
   return typeof onlyAudience === "string" && isAcceptedAudience(onlyAudience);
 }
 
-function hasRequiredScope(payload: JWTPayload): boolean {
-  return readScopes(payload).includes(REQUIRED_AUTH0_SCOPE);
+function hasRequiredScope(
+  payload: JWTPayload,
+  additionalScopes: readonly string[] = [],
+): boolean {
+  const scopes = readScopes(payload);
+  return [REQUIRED_AUTH0_SCOPE, ...additionalScopes].every((scope) =>
+    scopes.includes(scope),
+  );
 }
 
 function readScopes(payload: JWTPayload): string[] {

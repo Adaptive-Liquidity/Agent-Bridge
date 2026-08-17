@@ -13,6 +13,8 @@ import {
   protectedResourceMetadataUrl,
   readJsonRpcMethod,
   REQUIRED_AUTH0_SCOPE,
+  REQUIRED_AUTH0_WRITE_SCOPE,
+  isConfirmedGrokBotSend,
   resolveAuth0Config,
   TRANSITIONAL_AUTH0_AUDIENCE,
   TRANSITIONAL_AUTH0_MCP_AUDIENCE,
@@ -252,6 +254,76 @@ test("treats a valid token missing the required scope as insufficient_scope", as
   assert.deepEqual(await verifyAuth0Bearer(`Bearer ${withRequired}`, config), {
     status: "ok",
   });
+});
+
+test("treats a valid read-only token as insufficient_scope when write is required", async (t) => {
+  const keys = await generateTestKeyMaterial();
+  mockJwksFetch(keys.publicJwk);
+  t.after(() => restoreFetch(originalFetch));
+
+  const config = {
+    issuer: TEST_ISSUER,
+    audience: CANONICAL_AUTH0_AUDIENCE,
+    jwksUri: TEST_JWKS_URI,
+  };
+  const readOnly = await signAccessToken(keys.privateKey);
+  const withWrite = await signAccessToken(keys.privateKey, {
+    claims: { scope: `${REQUIRED_AUTH0_SCOPE} ${REQUIRED_AUTH0_WRITE_SCOPE}` },
+  });
+
+  assert.deepEqual(
+    await verifyAuth0Bearer(`Bearer ${readOnly}`, config, [
+      REQUIRED_AUTH0_WRITE_SCOPE,
+    ]),
+    { status: "insufficient_scope" },
+  );
+  assert.deepEqual(
+    await verifyAuth0Bearer(`Bearer ${withWrite}`, config, [
+      REQUIRED_AUTH0_WRITE_SCOPE,
+    ]),
+    { status: "ok" },
+  );
+});
+
+test("detects only a confirmed send_instruction_to_grok_bot tools/call", () => {
+  assert.equal(
+    isConfirmedGrokBotSend({
+      jsonrpc: "2.0",
+      method: "tools/call",
+      params: {
+        name: "send_instruction_to_grok_bot",
+        arguments: { confirm: true },
+      },
+    }),
+    true,
+  );
+  assert.equal(
+    isConfirmedGrokBotSend({
+      jsonrpc: "2.0",
+      method: "tools/call",
+      params: {
+        name: "send_instruction_to_grok_bot",
+        arguments: { confirm: false },
+      },
+    }),
+    false,
+  );
+  assert.equal(
+    isConfirmedGrokBotSend({
+      jsonrpc: "2.0",
+      method: "tools/call",
+      params: { name: "send_instruction_to_grok_bot", arguments: {} },
+    }),
+    false,
+  );
+  assert.equal(
+    isConfirmedGrokBotSend({
+      jsonrpc: "2.0",
+      method: "tools/call",
+      params: { name: "list_grok_bots" },
+    }),
+    false,
+  );
 });
 
 test("builds RFC 9728 protected-resource metadata from Auth0 config", () => {
