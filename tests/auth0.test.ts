@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  ACCEPTED_AUTH0_JWT_AUDIENCES,
   allowsUnauthenticatedMixedAuth,
   auth0InsufficientScopeWwwAuthenticate,
   auth0WwwAuthenticate,
@@ -13,6 +14,8 @@ import {
   readJsonRpcMethod,
   REQUIRED_AUTH0_SCOPE,
   resolveAuth0Config,
+  TRANSITIONAL_AUTH0_AUDIENCE,
+  TRANSITIONAL_AUTH0_MCP_AUDIENCE,
   verifyAuth0Bearer,
 } from "../src/auth0.js";
 import {
@@ -41,7 +44,7 @@ test("treats absent Auth0 env as unconfigured", () => {
   assert.deepEqual(resolveAuth0Config({}), { status: "unconfigured" });
 });
 
-test("fails closed when issuer is missing or audience is not canonical", () => {
+test("fails closed when issuer is missing or audience is not accepted", () => {
   assert.deepEqual(
     resolveAuth0Config({
       AUTH0_AUDIENCE: CANONICAL_AUTH0_AUDIENCE,
@@ -58,12 +61,20 @@ test("fails closed when issuer is missing or audience is not canonical", () => {
   assert.deepEqual(
     resolveAuth0Config({
       AUTH0_ISSUER: TEST_ISSUER,
+      AUTH0_AUDIENCE: `${CANONICAL_AUTH0_AUDIENCE}/api/mcp`,
+    }),
+    { status: "invalid" },
+  );
+  assert.deepEqual(
+    resolveAuth0Config({
+      AUTH0_ISSUER: TEST_ISSUER,
     }),
     { status: "invalid" },
   );
 });
 
-test("resolves ready config and default JWKS URI from the issuer", () => {
+test("resolves ready config for the public phi audience and default JWKS URI", () => {
+  assert.equal(CANONICAL_AUTH0_AUDIENCE, "https://agent-bridge-phi.vercel.app");
   assert.deepEqual(
     resolveAuth0Config({
       AUTH0_ISSUER: TEST_ISSUER,
@@ -90,6 +101,23 @@ test("resolves ready config and default JWKS URI from the issuer", () => {
         issuer: "https://tenant.auth0.com",
         audience: CANONICAL_AUTH0_AUDIENCE,
         jwksUri: "https://tenant.auth0.com/custom/jwks.json",
+      },
+    },
+  );
+});
+
+test("resolves ready config for the transitional oauth-preview audience", () => {
+  assert.deepEqual(
+    resolveAuth0Config({
+      AUTH0_ISSUER: TEST_ISSUER,
+      AUTH0_AUDIENCE: TRANSITIONAL_AUTH0_AUDIENCE,
+    }),
+    {
+      status: "ready",
+      config: {
+        issuer: TEST_ISSUER,
+        audience: CANONICAL_AUTH0_AUDIENCE,
+        jwksUri: TEST_JWKS_URI,
       },
     },
   );
@@ -126,33 +154,38 @@ test("rejects a token with a bad signature", async (t) => {
   assert.deepEqual(accepted, { status: "unauthorized" });
 });
 
-test("accepts a token whose audience is the MCP resource URL", async (t) => {
+test("accepts a token whose audience is any accepted origin or MCP resource URL", async (t) => {
   const keys = await generateTestKeyMaterial();
   mockJwksFetch(keys.publicJwk);
   t.after(() => restoreFetch(originalFetch));
 
-  const token = await signAccessToken(keys.privateKey, {
-    audience: CANONICAL_AUTH0_MCP_AUDIENCE,
-  });
-  const accepted = await verifyAuth0Bearer(`Bearer ${token}`, {
+  const config = {
     issuer: TEST_ISSUER,
     audience: CANONICAL_AUTH0_AUDIENCE,
     jwksUri: TEST_JWKS_URI,
-  });
+  };
 
-  assert.deepEqual(accepted, { status: "ok" });
+  assert.deepEqual(ACCEPTED_AUTH0_JWT_AUDIENCES, [
+    CANONICAL_AUTH0_AUDIENCE,
+    CANONICAL_AUTH0_MCP_AUDIENCE,
+    TRANSITIONAL_AUTH0_AUDIENCE,
+    TRANSITIONAL_AUTH0_MCP_AUDIENCE,
+  ]);
 
-  const arrayAudienceToken = await signAccessToken(keys.privateKey, {
-    audience: [CANONICAL_AUTH0_MCP_AUDIENCE],
-  });
-  assert.deepEqual(
-    await verifyAuth0Bearer(`Bearer ${arrayAudienceToken}`, {
-      issuer: TEST_ISSUER,
-      audience: CANONICAL_AUTH0_AUDIENCE,
-      jwksUri: TEST_JWKS_URI,
-    }),
-    { status: "ok" },
-  );
+  for (const audience of ACCEPTED_AUTH0_JWT_AUDIENCES) {
+    const token = await signAccessToken(keys.privateKey, { audience });
+    assert.deepEqual(await verifyAuth0Bearer(`Bearer ${token}`, config), {
+      status: "ok",
+    });
+
+    const arrayAudienceToken = await signAccessToken(keys.privateKey, {
+      audience: [audience],
+    });
+    assert.deepEqual(
+      await verifyAuth0Bearer(`Bearer ${arrayAudienceToken}`, config),
+      { status: "ok" },
+    );
+  }
 });
 
 test("rejects a token with the wrong audience", async (t) => {
@@ -229,7 +262,7 @@ test("builds RFC 9728 protected-resource metadata from Auth0 config", () => {
       jwksUri: TEST_JWKS_URI,
     }),
     {
-      resource: CANONICAL_AUTH0_AUDIENCE,
+      resource: "https://agent-bridge-phi.vercel.app",
       authorization_servers: [TEST_ISSUER],
       scopes_supported: [REQUIRED_AUTH0_SCOPE],
       bearer_methods_supported: ["header"],
@@ -237,15 +270,15 @@ test("builds RFC 9728 protected-resource metadata from Auth0 config", () => {
   );
 });
 
-test("401 challenge points at the absolute protected-resource metadata URL", () => {
+test("401 challenge points at the public phi protected-resource metadata URL", () => {
   const metadataParam = ["resource", "metadata"].join("_");
+  assert.equal(
+    protectedResourceMetadataUrl(),
+    "https://agent-bridge-phi.vercel.app/.well-known/oauth-protected-resource",
+  );
   assert.equal(
     auth0WwwAuthenticate(),
     `Bearer ${metadataParam}="${protectedResourceMetadataUrl()}", scope="${REQUIRED_AUTH0_SCOPE}", error="invalid_token", error_description="Authentication required"`,
-  );
-  assert.equal(
-    protectedResourceMetadataUrl(),
-    `${CANONICAL_AUTH0_AUDIENCE}/.well-known/oauth-protected-resource`,
   );
 });
 

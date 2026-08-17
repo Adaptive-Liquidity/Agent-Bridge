@@ -4,11 +4,13 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
 import { handleMcpRequest } from "../api/mcp.js";
 import {
+  ACCEPTED_AUTH0_JWT_AUDIENCES,
   auth0InsufficientScopeWwwAuthenticate,
   auth0WwwAuthenticate,
   CANONICAL_AUTH0_AUDIENCE,
-  CANONICAL_AUTH0_MCP_AUDIENCE,
+  protectedResourceMetadataUrl,
   REQUIRED_AUTH0_SCOPE,
+  TRANSITIONAL_AUTH0_AUDIENCE,
 } from "../src/auth0.js";
 import {
   generateTestKeyMaterial,
@@ -31,6 +33,15 @@ const auth0PreviewEnv = {
   AUTH0_AUDIENCE: CANONICAL_AUTH0_AUDIENCE,
   AUTH0_JWKS_URI: TEST_JWKS_URI,
 };
+
+const auth0TransitionalEnv = {
+  AUTH0_ISSUER: TEST_ISSUER,
+  AUTH0_AUDIENCE: TRANSITIONAL_AUTH0_AUDIENCE,
+  AUTH0_JWKS_URI: TEST_JWKS_URI,
+};
+
+const PHI_RESOURCE_METADATA_URL =
+  "https://agent-bridge-phi.vercel.app/.well-known/oauth-protected-resource";
 
 function createResponse(): {
   response: ServerResponse;
@@ -199,14 +210,15 @@ test("Auth0 Mixed path returns a resource_metadata 401 for tools/call without a 
 
   assert.equal(recorded.status, 401);
   assert.equal(recorded.headers?.["WWW-Authenticate"], auth0WwwAuthenticate());
+  assert.equal(protectedResourceMetadataUrl(), PHI_RESOURCE_METADATA_URL);
   assert.equal(
-    recorded.headers?.["WWW-Authenticate"]?.includes('error="invalid_token"'),
+    recorded.headers?.["WWW-Authenticate"]?.includes(
+      `${["resource", "metadata"].join("_")}="${PHI_RESOURCE_METADATA_URL}"`,
+    ),
     true,
   );
   assert.equal(
-    recorded.headers?.["WWW-Authenticate"]?.includes(
-      `${["resource", "metadata"].join("_")}=`,
-    ),
+    recorded.headers?.["WWW-Authenticate"]?.includes('error="invalid_token"'),
     true,
   );
   assert.equal(handleRequest.mock.calls.length, 0);
@@ -297,7 +309,35 @@ test("Auth0 Mixed path treats a non-JSON-RPC body as protected", async (t) => {
   assert.equal(handleRequest.mock.calls.length, 0);
 });
 
-test("Auth0 preview path accepts a JWT whose audience is the MCP resource URL", async (t) => {
+test("Auth0 Mixed path stays ready on the transitional oauth-preview audience", async (t) => {
+  const handleRequest = mock.method(
+    NodeStreamableHTTPServerTransport.prototype,
+    "handleRequest",
+    async () => undefined,
+  );
+  t.after(() => {
+    handleRequest.mock.restore();
+  });
+
+  const parsedBody = { jsonrpc: "2.0", id: 14, method: "tools/list" };
+  const request = {
+    headers: {},
+    body: parsedBody,
+  } as IncomingMessage & { body?: unknown };
+  const { response, recorded } = createResponse();
+
+  await handleMcpRequest(request, response, auth0TransitionalEnv);
+
+  assert.equal(recorded.status, undefined);
+  assert.equal(handleRequest.mock.calls.length, 1);
+  assert.deepEqual(handleRequest.mock.calls[0]?.arguments, [
+    request,
+    response,
+    parsedBody,
+  ]);
+});
+
+test("Auth0 preview path accepts a JWT whose audience is any accepted origin or MCP URL", async (t) => {
   const keys = await generateTestKeyMaterial();
   mockJwksFetch(keys.publicJwk);
   t.after(() => restoreFetch(originalFetch));
@@ -311,21 +351,60 @@ test("Auth0 preview path accepts a JWT whose audience is the MCP resource URL", 
     handleRequest.mock.restore();
   });
 
-  const token = await signAccessToken(keys.privateKey, {
-    audience: CANONICAL_AUTH0_MCP_AUDIENCE,
+  for (const [index, audience] of ACCEPTED_AUTH0_JWT_AUDIENCES.entries()) {
+    const token = await signAccessToken(keys.privateKey, { audience });
+    const { response, recorded } = createResponse();
+    await handleMcpRequest(
+      {
+        headers: { authorization: `Bearer ${token}` },
+        body: { jsonrpc: "2.0", id: 13 + index, method: "tools/call" },
+      } as IncomingMessage & { body?: unknown },
+      response,
+      auth0PreviewEnv,
+    );
+
+    assert.equal(recorded.status, undefined, audience);
+  }
+
+  assert.equal(
+    handleRequest.mock.calls.length,
+    ACCEPTED_AUTH0_JWT_AUDIENCES.length,
+  );
+});
+
+test("Auth0 Mixed path still requires a JWT for tools/call on the transitional audience", async (t) => {
+  const handleRequest = mock.method(
+    NodeStreamableHTTPServerTransport.prototype,
+    "handleRequest",
+    async () => undefined,
+  );
+  t.after(() => {
+    handleRequest.mock.restore();
   });
+
   const { response, recorded } = createResponse();
   await handleMcpRequest(
     {
-      headers: { authorization: `Bearer ${token}` },
-      body: { jsonrpc: "2.0", id: 13, method: "tools/call" },
+      headers: {},
+      body: {
+        jsonrpc: "2.0",
+        id: 20,
+        method: "tools/call",
+        params: { name: "bridge_status" },
+      },
     } as IncomingMessage & { body?: unknown },
     response,
-    auth0PreviewEnv,
+    auth0TransitionalEnv,
   );
 
-  assert.equal(recorded.status, undefined);
-  assert.equal(handleRequest.mock.calls.length, 1);
+  assert.equal(recorded.status, 401);
+  assert.equal(
+    recorded.headers?.["WWW-Authenticate"]?.includes(
+      `${["resource", "metadata"].join("_")}="${PHI_RESOURCE_METADATA_URL}"`,
+    ),
+    true,
+  );
+  assert.equal(handleRequest.mock.calls.length, 0);
 });
 
 test("Auth0 preview path does not accept AGENT_BRIDGE_PUBLIC_TOKEN as a substitute", async (t) => {
@@ -400,7 +479,7 @@ test("Auth0 preview path returns 403 when a valid JWT is missing the required sc
   );
   assert.equal(
     recorded.headers?.["WWW-Authenticate"],
-    `Bearer error="insufficient_scope", scope="${REQUIRED_AUTH0_SCOPE}", ${["resource", "metadata"].join("_")}="${CANONICAL_AUTH0_AUDIENCE}/.well-known/oauth-protected-resource"`,
+    `Bearer error="insufficient_scope", scope="${REQUIRED_AUTH0_SCOPE}", ${["resource", "metadata"].join("_")}="${PHI_RESOURCE_METADATA_URL}"`,
   );
   assert.equal(handleRequest.mock.calls.length, 0);
 });

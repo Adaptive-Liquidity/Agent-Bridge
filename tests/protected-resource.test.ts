@@ -6,6 +6,7 @@ import { handleProtectedResourceRequest } from "../api/oauth-protected-resource.
 import {
   CANONICAL_AUTH0_AUDIENCE,
   REQUIRED_AUTH0_SCOPE,
+  TRANSITIONAL_AUTH0_AUDIENCE,
 } from "../src/auth0.js";
 import { TEST_ISSUER, TEST_JWKS_URI } from "./auth0-test-support.js";
 
@@ -74,7 +75,7 @@ test("vercel.json rewrites root and path-inserted protected-resource URLs", asyn
   ]);
 });
 
-test("protected-resource metadata matches the RFC 9728 preview shape", async () => {
+test("protected-resource metadata publishes the public phi resource", async () => {
   const { response, recorded } = createResponse();
   await handleProtectedResourceRequest({} as IncomingMessage, response, {
     AUTH0_ISSUER: TEST_ISSUER,
@@ -85,7 +86,24 @@ test("protected-resource metadata matches the RFC 9728 preview shape", async () 
   assert.equal(recorded.status, 200);
   assert.equal(recorded.headers?.["Content-Type"], "application/json");
   assert.deepEqual(JSON.parse(recorded.body ?? ""), {
-    resource: CANONICAL_AUTH0_AUDIENCE,
+    resource: "https://agent-bridge-phi.vercel.app",
+    authorization_servers: [TEST_ISSUER],
+    scopes_supported: [REQUIRED_AUTH0_SCOPE],
+    bearer_methods_supported: ["header"],
+  });
+});
+
+test("protected-resource metadata stays ready on the transitional oauth-preview audience", async () => {
+  const { response, recorded } = createResponse();
+  await handleProtectedResourceRequest({} as IncomingMessage, response, {
+    AUTH0_ISSUER: TEST_ISSUER,
+    AUTH0_AUDIENCE: TRANSITIONAL_AUTH0_AUDIENCE,
+    AUTH0_JWKS_URI: TEST_JWKS_URI,
+  });
+
+  assert.equal(recorded.status, 200);
+  assert.deepEqual(JSON.parse(recorded.body ?? ""), {
+    resource: "https://agent-bridge-phi.vercel.app",
     authorization_servers: [TEST_ISSUER],
     scopes_supported: [REQUIRED_AUTH0_SCOPE],
     bearer_methods_supported: ["header"],
