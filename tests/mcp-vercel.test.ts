@@ -309,7 +309,7 @@ test("Auth0 Mixed path treats a non-JSON-RPC body as protected", async (t) => {
   assert.equal(handleRequest.mock.calls.length, 0);
 });
 
-test("Auth0 Mixed path stays ready on the transitional oauth-preview audience", async (t) => {
+test("oauth-preview AUTH0_AUDIENCE stays ready without publishing that host", async (t) => {
   const handleRequest = mock.method(
     NodeStreamableHTTPServerTransport.prototype,
     "handleRequest",
@@ -372,7 +372,7 @@ test("Auth0 preview path accepts a JWT whose audience is any accepted origin or 
   );
 });
 
-test("Auth0 Mixed path still requires a JWT for tools/call on the transitional audience", async (t) => {
+test("oauth-preview AUTH0_AUDIENCE still requires a JWT for tools/call", async (t) => {
   const handleRequest = mock.method(
     NodeStreamableHTTPServerTransport.prototype,
     "handleRequest",

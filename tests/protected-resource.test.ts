@@ -93,7 +93,7 @@ test("protected-resource metadata publishes the public phi resource", async () =
   });
 });
 
-test("protected-resource metadata stays ready on the transitional oauth-preview audience", async () => {
+test("oauth-preview AUTH0_AUDIENCE stays ready but still publishes the phi resource", async () => {
   const { response, recorded } = createResponse();
   await handleProtectedResourceRequest({} as IncomingMessage, response, {
     AUTH0_ISSUER: TEST_ISSUER,

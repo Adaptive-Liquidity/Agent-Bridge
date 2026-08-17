@@ -106,7 +106,7 @@ test("resolves ready config for the public phi audience and default JWKS URI", (
   );
 });
 
-test("resolves ready config for the transitional oauth-preview audience", () => {
+test("oauth-preview AUTH0_AUDIENCE stays ready and still resolves the phi audience", () => {
   assert.deepEqual(
     resolveAuth0Config({
       AUTH0_ISSUER: TEST_ISSUER,

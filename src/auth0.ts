@@ -1,19 +1,28 @@
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 
+/** Public Auth0 audience and RFC 9728 resource. ChatGPT uses this origin only. */
 export const CANONICAL_AUTH0_AUDIENCE = "https://agent-bridge-phi.vercel.app";
 
+/** Public MCP resource URL for ChatGPT. */
 export const CANONICAL_AUTH0_MCP_AUDIENCE = `${CANONICAL_AUTH0_AUDIENCE}/api/mcp`;
 
+/**
+ * Token/env compatibility only. oauth-preview aliases the same production
+ * deploy as phi but remains Vercel-SSO-gated. Never publish this as the
+ * discovery resource and do not tell ChatGPT to use it.
+ */
 export const TRANSITIONAL_AUTH0_AUDIENCE =
   "https://agent-bridge-oauth-preview-adaptive-liquidity-labs.vercel.app";
 
 export const TRANSITIONAL_AUTH0_MCP_AUDIENCE = `${TRANSITIONAL_AUTH0_AUDIENCE}/api/mcp`;
 
+/** AUTH0_AUDIENCE values that keep Preview env from 503. Not the public identity. */
 export const ACCEPTED_AUTH0_ENV_AUDIENCES = [
   CANONICAL_AUTH0_AUDIENCE,
   TRANSITIONAL_AUTH0_AUDIENCE,
 ] as const;
 
+/** JWT aud values accepted during transition. Discovery still publishes phi only. */
 export const ACCEPTED_AUTH0_JWT_AUDIENCES = [
   CANONICAL_AUTH0_AUDIENCE,
   CANONICAL_AUTH0_MCP_AUDIENCE,
@@ -69,6 +78,7 @@ export function joinIssuerWellKnown(
   return `${base}.well-known/${wellKnownFile}`;
 }
 
+/** Absolute RFC 9728 metadata URL on the public phi origin only. */
 export function protectedResourceMetadataUrl(): string {
   return `${CANONICAL_AUTH0_AUDIENCE}${PROTECTED_RESOURCE_METADATA_PATH}`;
 }
@@ -142,6 +152,7 @@ export function resolveAuth0Config(
   };
 }
 
+/** RFC 9728 document. `resource` is always the public phi origin. */
 export function buildProtectedResourceMetadata(
   config: Auth0Config,
 ): ProtectedResourceMetadata {
