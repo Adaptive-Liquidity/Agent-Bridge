@@ -1,0 +1,151 @@
+# Instincts generated from https://github.com/Adaptive-Liquidity/Agent-Bridge
+# Generated: 2026-08-16T11:45:14.019Z
+# Version: 2.0
+# NOTE: This file supplements (does not replace) any existing curated instincts.
+# High-confidence manually curated instincts should be preserved alongside these.
+
+---
+id: Agent-Bridge-commit-conventional
+trigger: "when writing a commit message"
+confidence: 0.85
+domain: git
+source: repo-analysis
+source_repo: https://github.com/Adaptive-Liquidity/Agent-Bridge
+---
+
+# Agent Bridge Commit Conventional
+
+## Action
+
+Use conventional commit format with prefixes: feat, docs, build, chore, test
+
+## Evidence
+
+- 12 commits analyzed
+- Detected conventional commit pattern
+- Examples: chore: add safe project defaults, build: add TypeScript project scaffold
+
+---
+id: Agent-Bridge-commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/Adaptive-Liquidity/Agent-Bridge
+---
+
+# Agent Bridge Commit Length
+
+## Action
+
+Keep commit messages concise (~35 characters)
+
+## Evidence
+
+- Average commit message length: 35 chars
+- Based on 12 commits
+
+---
+id: Agent-Bridge-naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/Adaptive-Liquidity/Agent-Bridge
+---
+
+# Agent Bridge Naming Files
+
+## Action
+
+Use camelCase naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: camelCase
+
+---
+id: Agent-Bridge-import-relative
+trigger: "when importing modules"
+confidence: 0.75
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/Adaptive-Liquidity/Agent-Bridge
+---
+
+# Agent Bridge Import Relative
+
+## Action
+
+Use relative imports for project files
+
+## Evidence
+
+- Import analysis shows relative import pattern
+- Example: import { x } from '../lib/x'
+
+---
+id: Agent-Bridge-export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/Adaptive-Liquidity/Agent-Bridge
+---
+
+# Agent Bridge Export Style
+
+## Action
+
+Prefer named exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: named
+
+---
+id: Agent-Bridge-test-separate
+trigger: "when writing tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/Adaptive-Liquidity/Agent-Bridge
+---
+
+# Agent Bridge Test Separate
+
+## Action
+
+Place tests in the tests/ or __tests__/ directory, mirroring src structure
+
+## Evidence
+
+- Separate test directory pattern detected
+- Tests live in dedicated test folders
+
+---
+id: Agent-Bridge-workflow-feature-development
+trigger: "when implementing a new feature"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Adaptive-Liquidity/Agent-Bridge
+---
+
+# Agent Bridge Workflow Feature Development
+
+## Action
+
+Follow the feature-development workflow:
+1. Add feature implementation
+2. Add tests for feature
+3. Update documentation
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~23x per month
+- Files: src/*
+
